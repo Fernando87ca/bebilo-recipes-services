@@ -28,10 +28,20 @@ import kotlinx.serialization.json.*
 
 @Serializable
 data class GeneratedRecipe(
-    val title: String, val ingredients: List<RecipeIngredientDto>, val cookingMethods: List<String>,
-    val instructions: RecipeInstructionsDto, val description: String?, val preparationMinutes: Int?,
-    val cookingMinutes: Int?, val servings: Int?, val storageNotes: String?, val adaptationNotes: String?,
-    val recommendedAgeMonths: Int?, val totalMinutes: Int?, val texture: String?, val tags: List<String>,
+    val title: String,
+    val ingredients: List<RecipeIngredientDto>,
+    val cookingMethods: List<String>,
+    val instructions: RecipeInstructionsDto,
+    val description: String?,
+    val preparationMinutes: Int?,
+    val cookingMinutes: Int?,
+    val servings: Int?,
+    val storageNotes: String?,
+    val adaptationNotes: String?,
+    val recommendedAgeMonths: Int?,
+    val totalMinutes: Int?,
+    val texture: String?,
+    val tags: List<String>,
 )
 
 @Serializable
@@ -108,8 +118,13 @@ class KoogRecipeGenerator(
         input: String
     ): String {
         val model = LLModel(
-            LLMProvider.OpenAI, modelId,
-            listOf(LLMCapability.Completion, LLMCapability.Schema.JSON.Standard, LLMCapability.OpenAIEndpoint.Responses)
+            provider = LLMProvider.OpenAI,
+            id = modelId,
+            capabilities = listOf(
+                LLMCapability.Completion,
+                LLMCapability.Schema.JSON.Standard,
+                LLMCapability.OpenAIEndpoint.Responses,
+            )
         )
         val params = OpenAIResponsesParams(
             maxTokens = 12000,
