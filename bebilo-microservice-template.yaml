@@ -1,0 +1,32 @@
+schemaVersion: "1.0"
+kind: BebiloMicroserviceTemplate
+project:
+  name: bebilo
+  packageRoot: com.elceller.bebilo
+  language: kotlin
+  buildSystem: gradle-kotlin-dsl
+  framework: ktor-server
+  dependencyInjection: ktor-native
+service:
+  id: recipes-service
+  packageName: com.elceller.bebilo.recipes
+  architecture: clean-architecture
+  persistence:
+    provider: firestore
+    documentPath: users/{uid}/recipes/{documentId}
+    publicIdentityField: summary.id
+  authentication:
+    source: authorization-bearer
+    identityEndpoint: auth-services /v1/user-info
+  api:
+    basePath: /v1
+    gatewayPrefix: /recipes
+    routes:
+      - { method: GET, path: /recipes, useCase: GetRecipesUseCase }
+      - { method: GET, path: "/recipe/{recipeId}", useCase: GetRecipeUseCase }
+  rules:
+    - authenticate_before_resolving_storage
+    - all_reads_are_scoped_to_authenticated_uid
+    - opaque_public_ids_are_decoded_once
+    - no_writes_generation_or_aiconfig_calls
+    - invalid_or_duplicate_documents_are_errors_not_partial_results

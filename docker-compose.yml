@@ -1,0 +1,30 @@
+name: bebilo
+
+services:
+  recipes-service:
+    build: .
+    image: recipes-service:local
+    ports:
+      - "8084:8080"
+    env_file:
+      - local.properties
+    environment:
+      PORT: "8080"
+      AUTH_SERVICE_BASE_URL: http://auth-service:8080/v1
+    volumes:
+      - ./secrets/firebase-admin.json:/opt/recipe-services-1.0-SNAPSHOT/secrets/firebase-admin.json:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.recipes-service.rule=Host(`api.bebilo.localhost`) && (Path(`/recipes`) || PathPrefix(`/recipes/`))
+      - traefik.http.routers.recipes-service.entrypoints=web
+      - traefik.http.routers.recipes-service.middlewares=recipes-strip-prefix
+      - traefik.http.routers.recipes-service.service=recipes-service
+      - traefik.http.middlewares.recipes-strip-prefix.stripprefix.prefixes=/recipes
+      - traefik.http.services.recipes-service.loadbalancer.server.port=8080
+      - traefik.docker.network=bebilo-gateway
+    networks:
+      - bebilo-gateway
+
+networks:
+  bebilo-gateway:
+    external: true

@@ -1,0 +1,482 @@
+---
+openapi: 3.0.3
+info:
+  title: Bebilo Recipes Service
+  version: 1.0.0
+  description: Consulta de recetas persistidas por cuenta Firebase. No crea ni modifica
+    recetas y no consulta AIconfig.
+servers:
+- url: http://api.bebilo.localhost:8088/recipes
+  description: Gateway local
+- url: http://localhost:8084
+  description: Servicio local directo
+paths:
+  "/v1/recipes":
+    get:
+      operationId: getRecipes
+      tags:
+      - Recipes
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Recetas completas guardadas de la cuenta autenticada
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RecipesResponseDto"
+        '401':
+          description: Se requiere un token Bearer válido
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: UNAUTHORIZED
+                message: Se requiere un token Bearer válido
+        '403':
+          description: Acceso al servicio no permitido
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: FORBIDDEN
+                message: Acceso al servicio no permitido
+        '500':
+          description: Error interno o contenido persistido inválido
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: INTERNAL_ERROR
+                message: Error interno o contenido persistido inválido
+        '503':
+          description: Servicio temporalmente no disponible
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: SERVICE_UNAVAILABLE
+                message: Servicio temporalmente no disponible
+      description: 'Biblioteca completa sin filtros, paginación ni límite implícito.
+        Cuenta sin recetas: 200 {"recipes":[]}. Los errores no producen listados vacíos
+        o parciales.'
+  "/v1/recipe/{recipeId}":
+    get:
+      operationId: getRecipe
+      tags:
+      - Recipes
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Recetas completas guardadas de la cuenta autenticada
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RecipeDto"
+        '400':
+          description: Identificador de receta inválido
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: VALIDATION_ERROR
+                message: Identificador de receta inválido
+        '401':
+          description: Se requiere un token Bearer válido
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: UNAUTHORIZED
+                message: Se requiere un token Bearer válido
+        '403':
+          description: Acceso al servicio no permitido
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: FORBIDDEN
+                message: Acceso al servicio no permitido
+        '404':
+          description: Receta no encontrada
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: NOT_FOUND
+                message: Receta no encontrada
+        '500':
+          description: Error interno o contenido persistido inválido
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: INTERNAL_ERROR
+                message: Error interno o contenido persistido inválido
+        '503':
+          description: Servicio temporalmente no disponible
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              example:
+                code: SERVICE_UNAVAILABLE
+                message: Servicio temporalmente no disponible
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        description: ID opaco no blanco, codificado como un único segmento y decodificado
+          una vez. No exige UUID. Inexistente o ajeno devuelve el mismo 404.
+        schema:
+          type: string
+          minLength: 1
+  "/health":
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: Servicio activo
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: OK
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
+  schemas:
+    RecipeImageDto:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          pattern: "^https?://"
+        altText:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+      required:
+      - url
+      nullable: true
+    RecipeBabyDto:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        name:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+      required:
+      - id
+      - name
+    RecipeAllergenDto:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        name:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+      required:
+      - code
+      - name
+    RecipeSummaryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        title:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        babies:
+          type: array
+          items:
+            "$ref": "#/components/schemas/RecipeBabyDto"
+          minItems: 1
+        allergens:
+          type: array
+          items:
+            "$ref": "#/components/schemas/RecipeAllergenDto"
+        coverImage:
+          "$ref": "#/components/schemas/RecipeImageDto"
+        recommendedAgeMonths:
+          type: integer
+          minimum: 0
+          nullable: true
+        totalMinutes:
+          type: integer
+          minimum: 0
+          nullable: true
+        texture:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+        tags:
+          type: array
+          items:
+            type: string
+          default: []
+      required:
+      - id
+      - title
+      - babies
+      - allergens
+    RecipeIngredientDto:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        allergens:
+          type: array
+          items:
+            "$ref": "#/components/schemas/RecipeAllergenDto"
+        category:
+          type: string
+          description: Categoría persistida obligatoria, también para ingredientes libres y recetas Loading/Error.
+          enum:
+          - vegetables
+          - fruit
+          - protein
+          - dairy
+          - cereal
+          - seeds
+          - oil_and_fats
+          - sweet
+        catalogId:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+        quantity:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+        preparation:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+      required:
+      - name
+      - allergens
+      - category
+    RecipeStepDto:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        text:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        title:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+        durationMinutes:
+          type: integer
+          minimum: 0
+          nullable: true
+        image:
+          "$ref": "#/components/schemas/RecipeImageDto"
+      required:
+      - id
+      - text
+    RecipeParagraphDto:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        text:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        image:
+          "$ref": "#/components/schemas/RecipeImageDto"
+      required:
+      - id
+      - text
+    RecipeStepsDto:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - steps
+        steps:
+          type: array
+          items:
+            "$ref": "#/components/schemas/RecipeStepDto"
+          minItems: 1
+      required:
+      - type
+      - steps
+      not:
+        required:
+        - paragraphs
+    RecipeNarrativeDto:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - narrative
+        paragraphs:
+          type: array
+          items:
+            "$ref": "#/components/schemas/RecipeParagraphDto"
+          minItems: 1
+      required:
+      - type
+      - paragraphs
+      not:
+        required:
+        - steps
+    RecipeInstructionsDto:
+      oneOf:
+      - "$ref": "#/components/schemas/RecipeStepsDto"
+      - "$ref": "#/components/schemas/RecipeNarrativeDto"
+      discriminator:
+        propertyName: type
+        mapping:
+          steps: "#/components/schemas/RecipeStepsDto"
+          narrative: "#/components/schemas/RecipeNarrativeDto"
+    RecipeDto:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - Loading
+          - Ready
+          - Error
+        summary:
+          "$ref": "#/components/schemas/RecipeSummaryDto"
+        ingredients:
+          type: array
+          items:
+            "$ref": "#/components/schemas/RecipeIngredientDto"
+          minItems: 1
+        cookingMethods:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        instructions:
+          "$ref": "#/components/schemas/RecipeInstructionsDto"
+        imageMode:
+          type: string
+          enum:
+          - none
+          - cover
+          - contextual
+        description:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+        preparationMinutes:
+          type: integer
+          minimum: 0
+          nullable: true
+        cookingMinutes:
+          type: integer
+          minimum: 0
+          nullable: true
+        servings:
+          type: integer
+          minimum: 1
+          nullable: true
+        storageNotes:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+        adaptationNotes:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          minLength: 1
+          pattern: "\\S"
+      required:
+      - status
+      - summary
+      - ingredients
+      - cookingMethods
+      - instructions
+      - imageMode
+    RecipesResponseDto:
+      type: object
+      properties:
+        recipes:
+          type: array
+          items:
+            "$ref": "#/components/schemas/RecipeDto"
+      required:
+      - recipes
+    ApiErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+        message:
+          type: string
+          minLength: 1
+          pattern: "\\S"
+      required:
+      - code
+      - message

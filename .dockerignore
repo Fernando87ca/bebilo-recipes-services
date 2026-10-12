@@ -1,0 +1,5 @@
+*
+!Dockerfile
+!build/
+!build/distributions/
+!build/distributions/recipe-services-1.0-SNAPSHOT.tar
