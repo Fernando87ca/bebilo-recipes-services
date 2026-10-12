@@ -63,6 +63,7 @@ enum class RecipeImageMode {
 }
 
 enum class RecipeStatus {
+    Created,
     Loading,
     Ready,
     Error,

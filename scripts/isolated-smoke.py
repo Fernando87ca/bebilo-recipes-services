@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Exercise real Firestore reads and both public GETs in a disposable local stack.
+"""Exercise real Firestore reads/writes and public recipe routes in a disposable local stack.
 
 Prerequisites: Docker, Python 3, recipes-service:local Docker image. Never uses real Firebase.
 """
 import json
+import base64
+import email.parser
+import email.policy
+import gzip
 from pathlib import Path
 import subprocess
 import tempfile
@@ -75,10 +79,99 @@ def fixture(recipe_id, index=0):
     }
 
 
+JPEG_BASE64 = "/9j/4AAQSkZJRgABAQAASABIAAD/4QBMRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAAqADAAQAAAABAAAAAgAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/8AAEQgAAgACAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/bAEMAAgICAgICAwICAwUDAwMFBgUFBQUGCAYGBgYGCAoICAgICAgKCgoKCgoKCgwMDAwMDA4ODg4ODw8PDw8PDw8PD//bAEMBAgICBAQEBwQEBxALCQsQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEP/dAAQAAf/aAAwDAQACEQMRAD8A98ooor+ez7w//9k="
+
+
 class AuthStub(BaseHTTPRequestHandler):
+    objects = {}
+    calls = []
+    jpeg = base64.b64decode(JPEG_BASE64)
+
+    def json_response(self, value, status=200):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(value).encode())
+
+    def object_metadata(self, name):
+        return {"kind": "storage#object", "name": name, "bucket": "demo-recipes", "generation": "1", "metageneration": "1", "size": str(len(self.objects[name])), "contentType": "image/jpeg"}
+
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/stats":
+            return self.json_response(self.calls)
+        if parsed.path.startswith(("/storage/v1/b/demo-recipes/o/", "/download/storage/v1/b/demo-recipes/o/")):
+            name = urllib.parse.unquote(parsed.path.split("/o/", 1)[1])
+            if name not in self.objects:
+                return self.json_response({"error": {"code": 404, "message": "missing"}}, 404)
+            if urllib.parse.parse_qs(parsed.query).get("alt") == ["media"]:
+                self.send_response(200); self.send_header("Content-Type", "image/jpeg"); self.end_headers()
+                return self.wfile.write(self.objects[name])
+            return self.json_response(self.object_metadata(name))
+        token = self.headers.get("Authorization", "").removeprefix("Bearer ")
+        if token not in ("a", "b", "empty"):
+            return self.json_response({"code": "UNAUTHORIZED"}, 401)
+        if parsed.path == "/v1/ai-configuration":
+            return self.json_response({"instructionStyle": "narrative" if token == "b" else "steps", "photoMode": "multiple" if token == "b" else "single" if token == "empty" else "none", "modelId": "gpt-6-luna"})
+        if parsed.path == "/v1/get-babies":
+            return self.json_response([{"id": "baby-" + token, "name": "Fixture", "ageMonths": 8, "feedingStage": "Puré", "preferredTexture": "suave", "restrictions": ["sin leche"], "foodInterest": "", "description": ""}])
+        self.json_response({}, 404)
     def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+        if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            chunks = []
+            while True:
+                size = int(self.rfile.readline().split(b";", 1)[0], 16)
+                if size == 0:
+                    self.rfile.readline()
+                    break
+                chunks.append(self.rfile.read(size)); self.rfile.read(2)
+            raw_body = b"".join(chunks)
+        else:
+            raw_body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        if self.headers.get("Content-Encoding") == "gzip":
+            raw_body = gzip.decompress(raw_body)
+        body = {} if self.path.startswith("/upload/") else json.loads(raw_body)
         token = body.get("token")
+        if self.path.startswith("/upload/storage/v1/b/demo-recipes/o"):
+            # The SDK uses a metadata+binary multipart upload; emulate its real HTTP boundary.
+            message = email.parser.BytesParser(policy=email.policy.default).parsebytes(
+                ("Content-Type: " + self.headers["Content-Type"] + "\r\nMIME-Version: 1.0\r\n\r\n").encode() + raw_body)
+            parts = list(message.iter_parts())
+            metadata = json.loads(parts[0].get_payload(decode=True))
+            self.objects[metadata["name"]] = parts[1].get_payload(decode=True)
+            return self.json_response(self.object_metadata(metadata["name"]))
+        if self.path == "/v1/responses":
+            assert self.headers["Authorization"] == "Bearer smoke-dummy-key"
+            assert body["model"] == "gpt-6-luna"
+            assert body["prompt_cache_options"]["mode"] == "explicit"
+            assert body["input"][0]["content"][-1]["prompt_cache_breakpoint"] == {"mode": "explicit"}
+            agent = body["text"]["format"]["name"]
+            self.calls.append({"agent": agent, "model": body["model"]})
+            time.sleep(0.15)  # Keep the actual LLM boundary asynchronous relative to the POST.
+            user = json.loads(body["input"][-1]["content"][0]["text"])
+            if agent == "composition":
+                ingredients = user["request"]["ingredients"]
+                if any(item["name"] == "FAIL" for item in ingredients):
+                    return self.json_response({"error": {"message": "simulated"}}, 500)
+                for item in ingredients:
+                    if item.get("quantity") is None: item["quantity"] = 100.0
+                    if item.get("unit") is None: item["unit"] = "g"
+                style = user["settings"]["instructionStyle"]
+                instructions = {"type": "steps", "steps": [{"id": "s1", "text": "Cocer al vapor"}, {"id": "s2", "text": "Dejar reposar"}]} if style == "steps" else {"type": "narrative", "paragraphs": [{"id": "p1", "text": "Cocer al vapor y triturar."}, {"id": "p2", "text": "Servir."}]}
+                output = {"title": user["request"].get("title") or "Patata al vapor", "ingredients": ingredients, "cookingMethods": user["request"]["cookingMethods"], "instructions": instructions, "description": "Receta de prueba", "preparationMinutes": 5, "cookingMinutes": 10, "servings": user["request"].get("servings") or 1, "storageNotes": None, "adaptationNotes": None, "recommendedAgeMonths": 8, "totalMinutes": 15, "texture": "Puré", "tags": []}
+            else:
+                recipe = user["recipe"]
+                targets = recipe["instructions"].get("steps", recipe["instructions"].get("paragraphs"))
+                output = {"images": [{"instructionId": None, "prompt": "PHOTOFAIL" if any(i["name"] == "PHOTOFAIL" for i in recipe["ingredients"]) else "Portada", "altText": "Patata"}]}
+                if user["photoMode"] == "multiple":
+                    output["images"].append({"instructionId": targets[0]["id"], "prompt": "Proceso", "altText": "Proceso"})
+            return self.json_response({"id": "response-smoke", "created_at": 1791792000, "model": body["model"], "object": "response", "parallel_tool_calls": False, "status": "completed", "text": {"format": {"type": "text"}}, "output": [{"id": "message-smoke", "type": "message", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": json.dumps(output), "annotations": []}]}], "usage": {"input_tokens": 1200, "output_tokens": 100, "total_tokens": 1300, "input_tokens_details": {"cached_tokens": 1024}, "output_tokens_details": {"reasoning_tokens": 0}}})
+        if self.path == "/v1/images/generations":
+            assert body["model"] == "gpt-image-2.5-flare" and body["output_format"] == "jpeg"
+            self.calls.append({"agent": "image", "model": body["model"]})
+            if "PHOTOFAIL" in body["prompt"]:
+                return self.json_response({"error": {"message": "image failed"}}, 500)
+            return self.json_response({"data": [{"b64_json": JPEG_BASE64}]})
         assert self.path == "/v1/user-info"
         assert self.headers.get("Authorization") == f"Bearer {token}"
         if token == "forbidden":
@@ -113,14 +206,21 @@ def main():
             # A non-existent collection is an empty successful read in the emulator.
             wait_for(f"{DOCUMENTS}/users")
             auth_script = Path(directory) / "auth.py"
-            stub_source = Path(__file__).read_text().split("class AuthStub", 1)[1].split("def main():", 1)[0]
-            auth_script.write_text("import json\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\nclass AuthStub" + stub_source + 'ThreadingHTTPServer(("0.0.0.0", 8080), AuthStub).serve_forever()\n')
+            stub_source = Path(__file__).read_text().split("JPEG_BASE64 =", 1)[1].split("def main():", 1)[0]
+            auth_script.write_text("import json, time, urllib.parse, base64, email.parser, email.policy, gzip\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\nJPEG_BASE64 =" + stub_source + 'ThreadingHTTPServer(("0.0.0.0", 8080), AuthStub).serve_forever()\n')
             subprocess.run(["docker", "run", "-d", "--name", names[2], "--network", network, "--network-alias", "auth",
                             "-v", f"{auth_script}:/app/auth.py:ro", "python:3.13-alpine", "python", "/app/auth.py"], check=True, stdout=subprocess.DEVNULL)
             started.append(names[2])
+            dummy_secret = Path(directory) / "openai-key"
+            dummy_secret.write_text("smoke-dummy-key\n")
+            dummy_secret.chmod(0o600)
             subprocess.run(["docker", "run", "-d", "--name", names[3], "--network", network, "--network-alias", "recipes",
                             "-p", "127.0.0.1:18084:8080", "-e", "PORT=8080", "-e", f"FIREBASE_PROJECT_ID={PROJECT}",
                             "-e", "FIRESTORE_EMULATOR_HOST=firestore:8080", "-e", "AUTH_SERVICE_BASE_URL=http://auth:8080/v1",
+                            "-e", "AI_CONFIGURATION_SERVICE_BASE_URL=http://auth:8080/v1", "-e", "BABY_SERVICE_BASE_URL=http://auth:8080/v1",
+                            "-e", "OPENAI_BASE_URL=http://auth:8080/v1", "-e", "OPENAI_API_KEY_FILE=/run/secrets/openai-key",
+                            "-v", f"{dummy_secret}:/run/secrets/openai-key:ro", "-e", "FIREBASE_STORAGE_BUCKET=demo-recipes",
+                            "-e", "STORAGE_EMULATOR_HOST=http://auth:8080", "-e", "RECIPES_PUBLIC_BASE_URL=http://api.bebilo.localhost:18088/recipes",
                             "recipes-service:local"], check=True, stdout=subprocess.DEVNULL)
             started.append(names[3])
             wait_for(f"{SERVICE}/health")
@@ -217,8 +317,71 @@ def main():
                 checks += 1
             assert request(f"{GATEWAY}/recipes/openapi.yaml", gateway=True) == (200, (ROOT / "src/main/resources/openapi.yaml").read_text())
             checks += 1
-            # These GETs do not depend on any AIconfig process; the isolated stack has none.
-            print(f"PASS: {checks} checks; Firestore emulator + Auth stub + real service + Traefik. No real Firebase data used.")
+            assert request(f"{DOCUMENTS}/users/smoke-a/recipes/corrupt", method="DELETE")[0] == 200
+            # POST and asynchronous generation with real Koog, Firebase SDKs and HTTP doubles.
+            def create(token, ingredient="Patata"):
+                body = {"babyIds": ["baby-" + token], "ingredients": [{"name": ingredient, "category": "vegetables", "allergens": []}], "cookingMethods": ["steam"]}
+                status, result = request(f"{GATEWAY}/recipes/v1/recipe", token, "POST", body, gateway=True)
+                assert status == 200, (status, result)
+                value = json.loads(result)
+                assert value["status"] == "Created"
+                return value
+
+            def finished(token, recipe_id):
+                seen = set()
+                for _ in range(100):
+                    status, result = request(f"{GATEWAY}/recipes/v1/recipe/{recipe_id}", token, gateway=True)
+                    assert status == 200, (status, result)
+                    value = json.loads(result); seen.add(value["status"])
+                    if value["status"] in ("Ready", "Error"):
+                        return value, seen
+                    time.sleep(0.05)
+                raise AssertionError("Generation did not finish")
+
+            for token, style in [("a", "steps"), ("b", "narrative")]:
+                created = create(token); checks += 1
+                generated, seen = finished(token, created["summary"]["id"])
+                assert generated["status"] == "Ready" and generated["instructions"]["type"] == style
+                assert "Loading" in seen
+                assert generated["ingredients"][0]["name"] == "Patata"
+                checks += 2
+                assert request(f"{GATEWAY}/recipes/v1/recipe/{created['summary']['id']}", "b" if token == "a" else "a", gateway=True)[0] == 404
+                checks += 1
+                if token == "b":
+                    images = [generated["summary"]["coverImage"], generated["instructions"]["paragraphs"][0]["image"]]
+                    assert generated["instructions"]["paragraphs"][1].get("image") is None
+                    for image in images:
+                        image_path = urllib.parse.urlparse(image["url"]).path
+                        req = urllib.request.Request(GATEWAY + image_path, headers={"Authorization": "Bearer b", "Host": "api.bebilo.localhost"})
+                        with urllib.request.urlopen(req, timeout=10) as response:
+                            assert response.headers["Content-Type"] == "image/jpeg"
+                            assert response.headers["Cache-Control"] == "private, no-store"
+                            assert response.read() == AuthStub.jpeg
+                        assert request(GATEWAY + image_path, "a", gateway=True)[0] == 404
+                        assert request(GATEWAY + image_path, gateway=True)[0] == 401
+                        checks += 3
+            failed = create("a", "FAIL")
+            assert finished("a", failed["summary"]["id"])[0]["status"] == "Error"
+            checks += 2
+            photo_failed = create("empty", "PHOTOFAIL")
+            value, _ = finished("empty", photo_failed["summary"]["id"])
+            assert value["status"] == "Ready" and value["summary"].get("coverImage") is None
+            checks += 2
+            stats = json.loads(subprocess.check_output(["docker", "exec", names[2], "python", "-c", "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/stats').read().decode())"]))
+            assert sum(c["agent"] == "composition" for c in stats) == 4
+            assert sum(c["agent"] == "visual-planning" for c in stats) == 2
+            assert sum(c["agent"] == "image" for c in stats) == 3
+            checks += 3
+            invalid = {"babyIds": ["baby-b"], "ingredients": [{"name": "Patata", "category": "vegetables", "allergens": []}], "cookingMethods": ["steam"]}
+            assert request(f"{GATEWAY}/recipes/v1/recipe", "a", "POST", invalid, gateway=True)[0] == 404
+            checks += 1
+            listed = request(f"{DOCUMENTS}/users/smoke-b/recipes")[1]
+            for document in json.loads(listed)["documents"]:
+                if "generationContext" in document["fields"]:
+                    assert "smoke-dummy-key" not in json.dumps(document["fields"])
+                    assert document["name"].rsplit("/", 1)[1] != generated["summary"]["id"]
+                    checks += 1
+            print(f"PASS: {checks} checks; real Recipes + Koog + Firebase SDKs + Firestore Emulator + Traefik; Auth/AI Configuration/Babies/OpenAI/GCS doubles. No real Firebase or LLM calls.")
         except Exception:
             for name in started:
                 subprocess.run(["docker", "logs", "--tail", "25", name], check=False)

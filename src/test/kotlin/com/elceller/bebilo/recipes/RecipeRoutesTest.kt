@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestFactory
 
 class RecipeRoutesTest {
-    @TestFactory fun `both GET preserve representations and states`() = listOf("Loading", "Ready", "Error").flatMap { status ->
+    @TestFactory fun `both GET preserve representations and states`() = listOf("Created", "Loading", "Ready", "Error").flatMap { status ->
         listOf("steps", "narrative").flatMap { type -> listOf("none", "cover", "contextual").map { mode ->
             DynamicTest.dynamicTest("$status $type $mode") { testApplication {
                 val value = storedRecipe(type = type, mode = mode, status = status).toRecipe()
@@ -37,7 +37,7 @@ class RecipeRoutesTest {
         } }
     }
     @TestFactory fun `both GET preserve every category for each status and catalog identity`() =
-        ingredientCategories.flatMap { category -> listOf("Loading", "Ready", "Error").map { status ->
+        ingredientCategories.flatMap { category -> listOf("Created", "Loading", "Ready", "Error").map { status ->
             DynamicTest.dynamicTest("$category $status") { testApplication {
                 val catalogs = listOf<String?>(null, "17", "future-id")
                 val document = storedRecipe(status = status)

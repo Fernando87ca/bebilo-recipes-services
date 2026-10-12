@@ -84,6 +84,7 @@ enum class RecipeImageModeDto {
 
 @Serializable
 enum class RecipeStatusDto {
+    @SerialName("Created") Created,
     @SerialName("Loading") Loading,
     @SerialName("Ready") Ready,
     @SerialName("Error") Error,

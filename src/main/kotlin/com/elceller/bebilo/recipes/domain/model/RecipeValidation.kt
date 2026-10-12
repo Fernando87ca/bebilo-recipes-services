@@ -27,7 +27,7 @@ fun Recipe.validateStoredContent() {
     }
     when (val value = instructions) {
         is RecipeInstructions.Steps -> {
-            valid(value.steps.isNotEmpty())
+            valid(status != RecipeStatus.Ready || value.steps.isNotEmpty())
             unique(value.steps.map { it.id })
             value.steps.forEach {
                 valid(it.id.isNotBlank() && it.text.isNotBlank())
@@ -37,7 +37,7 @@ fun Recipe.validateStoredContent() {
             }
         }
         is RecipeInstructions.Narrative -> {
-            valid(value.paragraphs.isNotEmpty())
+            valid(status != RecipeStatus.Ready || value.paragraphs.isNotEmpty())
             unique(value.paragraphs.map { it.id })
             value.paragraphs.forEach {
                 valid(it.id.isNotBlank() && it.text.isNotBlank())

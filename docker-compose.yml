@@ -11,6 +11,12 @@ services:
     environment:
       PORT: "8080"
       AUTH_SERVICE_BASE_URL: http://auth-service:8080/v1
+      AI_CONFIGURATION_SERVICE_BASE_URL: http://aiconfig-service:8080/v1
+      BABY_SERVICE_BASE_URL: http://baby-service:8080/v1
+      RECIPES_PUBLIC_BASE_URL: http://api.bebilo.localhost:8088/recipes
+      FIREBASE_STORAGE_BUCKET: bebilo-dev.firebasestorage.app
+      OPENAI_IMAGE_MODEL: gpt-image-2.5-flare
+      RECIPE_GENERATION_CONCURRENCY: "2"
     volumes:
       - ./secrets/firebase-admin.json:/opt/recipe-services-1.0-SNAPSHOT/secrets/firebase-admin.json:ro
     labels:

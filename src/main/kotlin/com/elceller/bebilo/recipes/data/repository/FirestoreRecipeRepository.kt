@@ -2,8 +2,10 @@ package com.elceller.bebilo.recipes.data.repository
 
 import com.elceller.bebilo.recipes.config.AppConfig
 import com.elceller.bebilo.recipes.data.mapper.toRecipe
+import com.elceller.bebilo.recipes.data.mapper.toStorageMap
 import com.elceller.bebilo.recipes.domain.model.*
 import com.elceller.bebilo.recipes.domain.repository.RecipeRepository
+import com.elceller.bebilo.recipes.domain.repository.RecipeWriteRepository
 import com.google.api.core.ApiFuture
 import com.google.api.gax.rpc.ApiException
 import com.google.api.gax.rpc.StatusCode.Code
@@ -20,7 +22,28 @@ import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-class FirestoreRecipeRepository(private val firestore: Firestore) : RecipeRepository, AutoCloseable {
+class FirestoreRecipeRepository(private val firestore: Firestore) : RecipeRepository, RecipeWriteRepository, AutoCloseable {
+    override suspend fun create(ownerUid: String, recipe: Recipe, context: GenerationContext): String = storageCall {
+        recipe.validateStoredContent()
+        val reference = collection(ownerUid).document()
+        reference.create(recipe.toStorageMap() + mapOf("generationContext" to context.toStorageMap(),
+            "generationImages" to emptyMap<String, String>())).await()
+        reference.id
+    }
+    override suspend fun save(ownerUid: String, documentId: String, recipe: Recipe, images: Map<String, String>) = storageCall {
+        recipe.validateStoredContent()
+        collection(ownerUid).document(documentId).update(recipe.toStorageMap() + ("generationImages" to images)).await()
+        Unit
+    }
+    override suspend fun imagePath(ownerUid: String, recipeId: String, imageId: String): String? = storageCall {
+        val documents = collection(ownerUid).whereEqualTo("summary.id", recipeId).get().await().documents
+        if (documents.size > 1) throw InvalidStoredRecipeException()
+        val document = documents.singleOrNull() ?: return@storageCall null
+        val references = document.get("generationImages") as? Map<*, *> ?: return@storageCall null
+        val path = references[imageId] as? String ?: return@storageCall null
+        if (path != "recipe-images/$ownerUid/${document.id}/$imageId.jpg") throw InvalidStoredRecipeException()
+        path
+    }
     override suspend fun getAll(ownerUid: String): List<Recipe> = storageCall {
         val recipes = collection(ownerUid).get().await().documents.map { it.data.toRecipe() }
         if (recipes.map { it.summary.id }.distinct().size != recipes.size) throw InvalidStoredRecipeException()

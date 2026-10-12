@@ -8,7 +8,10 @@ junit-jupiter = "5.10.1"
 mockk = "1.14.9"
 firebase-admin = "9.10.0"
 
+koog = "1.3.0"
+
 [libraries]
+koog-agents = { module = "ai.koog:koog-agents", version.ref = "koog" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }

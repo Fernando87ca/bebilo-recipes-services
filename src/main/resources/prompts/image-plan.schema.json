@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "properties": {
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instructionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "altText": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "instructionId",
+          "prompt",
+          "altText"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "images"
+  ],
+  "additionalProperties": false
+}

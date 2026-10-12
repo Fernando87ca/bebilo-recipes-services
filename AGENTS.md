@@ -1,6 +1,6 @@
 # Agents Guide
 
-`recipe-services` consulta recetas completas persistidas por cuenta Firebase. Mantener las capas
+`recipe-services` consulta y crea recetas persistidas por cuenta Firebase. Mantener las capas
 `api`, `domain`, `data`, `di`, `config` y `plugins`, DTOs separados de Domain y DI nativa de Ktor.
 
 Rutas internas GET `/v1/recipes` y GET `/v1/recipe/{recipeId}`, públicas bajo `/recipes`.
@@ -13,6 +13,22 @@ Conservar todos los campos persistidos y exigir `status` y `ingredients[].catego
 Category admite solo los ocho valores de OpenAPI, sin default, inferencia ni reparación. Documentos inválidos y IDs
 duplicados son errores internos; no producir bibliotecas parciales o vacías para ocultarlos.
 Actualizar OpenAPI y pruebas con cualquier cambio de contrato.
+
+POST `/v1/recipe` consulta AI Configuration y Babies con el Bearer y persiste Created antes de
+responder 200. El worker de aplicación usa un contexto fijo sin tokens, escribe Loading antes
+de Koog y Ready/Error al terminar. Created/Loading/Error admiten instrucciones vacías; Ready
+requiere contenido textual completo. Conservar ingredientes iniciales, categorías y métodos.
+Los prompts españoles y schemas están en `src/main/resources/prompts/`; recompilar para cambiarlos.
+No introducir reintentos, reparación LLM ni recuperación tras reinicio.
+
+Las fotos generadas son opcionales para Ready y se guardan en Storage privado. GET
+`/v1/recipe/{recipeId}/images/{imageId}` autentica al propietario y sirve JPEG desde una
+referencia interna validada. No publicar tokens de descarga ni aceptar rutas de bucket del cliente.
+En desarrollo, la clave OpenAI se lee de `OPENAI_API_KEY` en `local.properties` ignorado.
+En producción puede inyectarse desde Google Secret Manager mediante variable de entorno o
+archivo indicado por `OPENAI_API_KEY_FILE` (con prioridad); nunca registrarla.
+`STORAGE_EMULATOR_HOST` solo puede usarse con proyecto demo y Firestore Emulator.
+
 
 Validación funcional desde este directorio:
 

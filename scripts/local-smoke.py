@@ -32,13 +32,24 @@ for url, gateway in [("http://localhost:8084/openapi.yaml", False), ("http://loc
     assert get(url, gateway=gateway) == (200, expected_contract)
     checks += 1
 for base, gateway in [("http://localhost:8084", False), ("http://localhost:8088/recipes", True)]:
-    for route in ["recipes", "recipe/recipe-001"]:
+    for route in ["recipes", "recipe/recipe-001", "recipe/recipe-001/images/image-001"]:
         for token in [None, "invalid-smoke-token"]:
             status, body = get(f"{base}/v1/{route}", token, gateway)
             assert status == 401, (base, route, status)
             value = json.loads(body)
             assert value["code"] == "UNAUTHORIZED" and value["message"]
             checks += 1
+for base, gateway in [("http://localhost:8084", False), ("http://localhost:8088/recipes", True)]:
+    # Unauthenticated POST must fail before any Firebase write or LLM call.
+    headers = {"Content-Type": "application/json"}
+    if gateway: headers["Host"] = "api.bebilo.localhost"
+    req = urllib.request.Request(base + "/v1/recipe", data=b"{}", headers=headers, method="POST")
+    try:
+        urllib.request.urlopen(req, timeout=10)
+        raise AssertionError("POST unexpectedly allowed anonymous creation")
+    except urllib.error.HTTPError as error:
+        assert error.code == 401 and json.loads(error.read())["code"] == "UNAUTHORIZED"
+    checks += 1
 for recipe_id in ["one/two ?#%", "literal%2F", " padded ", "puré-你好", "a+b"]:
     encoded = urllib.parse.quote(recipe_id, safe="")
     status, body = get(f"http://localhost:8088/recipes/v1/recipe/{encoded}", "invalid-smoke-token", True)

@@ -1,0 +1,203 @@
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "ingredients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "allergens": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "vegetables",
+              "fruit",
+              "protein",
+              "dairy",
+              "cereal",
+              "seeds",
+              "oil_and_fats",
+              "sweet"
+            ]
+          },
+          "catalogId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quantity": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preparation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "allergens",
+          "category",
+          "catalogId",
+          "quantity",
+          "unit",
+          "preparation"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "cookingMethods": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "instructions": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "narrative"
+          ]
+        },
+        "paragraphs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "type",
+        "paragraphs"
+      ],
+      "additionalProperties": false
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "storageNotes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "adaptationNotes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "texture": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "preparationMinutes": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "cookingMinutes": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "servings": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "recommendedAgeMonths": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "totalMinutes": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "title",
+    "ingredients",
+    "cookingMethods",
+    "instructions",
+    "description",
+    "storageNotes",
+    "adaptationNotes",
+    "texture",
+    "preparationMinutes",
+    "cookingMinutes",
+    "servings",
+    "recommendedAgeMonths",
+    "totalMinutes",
+    "tags"
+  ],
+  "additionalProperties": false
+}

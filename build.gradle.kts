@@ -26,6 +26,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.logback.classic)
     implementation(libs.firebase.admin)
+    implementation(libs.koog.agents)
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.ktor.server.test.host)

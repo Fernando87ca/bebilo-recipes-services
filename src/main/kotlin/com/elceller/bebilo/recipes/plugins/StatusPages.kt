@@ -19,6 +19,8 @@ fun Application.configureStatusPages() {
                 is UnauthorizedException -> HttpStatusCode.Unauthorized
                 is ForbiddenException -> HttpStatusCode.Forbidden
                 is RecipeNotFoundException -> HttpStatusCode.NotFound
+                is BabyNotFoundException -> HttpStatusCode.NotFound
+                is DependencyResponseException -> HttpStatusCode.BadGateway
                 is ServiceUnavailableException -> HttpStatusCode.ServiceUnavailable
                 is InvalidStoredRecipeException, is InternalServiceException -> HttpStatusCode.InternalServerError
             }

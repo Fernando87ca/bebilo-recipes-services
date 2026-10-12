@@ -2,16 +2,17 @@
 openapi: 3.0.3
 info:
   title: Bebilo Recipes Service
-  version: 1.0.0
-  description: Consulta de recetas persistidas por cuenta Firebase. No crea ni modifica
-    recetas y no consulta AIconfig.
+  version: 1.1.0
+  description: Consulta y creación de recetas por cuenta Firebase. POST devuelve Created y genera contenido
+    con Koog fuera de la petición HTTP. Los GET leen el contenido persistido sin consultar AI Configuration
+    ni Babies.
 servers:
 - url: http://api.bebilo.localhost:8088/recipes
   description: Gateway local
 - url: http://localhost:8084
   description: Servicio local directo
 paths:
-  "/v1/recipes":
+  /v1/recipes:
     get:
       operationId: getRecipes
       tags:
@@ -20,17 +21,18 @@ paths:
       - bearerAuth: []
       responses:
         '200':
-          description: Recetas completas guardadas de la cuenta autenticada
+          description: Recetas persistidas; Created/Loading/Error pueden no tener instrucciones todavía.
+            Ready requiere instrucciones completas.
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/RecipesResponseDto"
+                $ref: '#/components/schemas/RecipesResponseDto'
         '401':
           description: Se requiere un token Bearer válido
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: UNAUTHORIZED
                 message: Se requiere un token Bearer válido
@@ -39,7 +41,7 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: FORBIDDEN
                 message: Acceso al servicio no permitido
@@ -48,7 +50,7 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: INTERNAL_ERROR
                 message: Error interno o contenido persistido inválido
@@ -57,14 +59,13 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: SERVICE_UNAVAILABLE
                 message: Servicio temporalmente no disponible
-      description: 'Biblioteca completa sin filtros, paginación ni límite implícito.
-        Cuenta sin recetas: 200 {"recipes":[]}. Los errores no producen listados vacíos
-        o parciales.'
-  "/v1/recipe/{recipeId}":
+      description: 'Biblioteca completa sin filtros, paginación ni límite implícito. Cuenta sin recetas:
+        200 {"recipes":[]}. Los errores no producen listados vacíos o parciales.'
+  /v1/recipe/{recipeId}:
     get:
       operationId: getRecipe
       tags:
@@ -73,17 +74,18 @@ paths:
       - bearerAuth: []
       responses:
         '200':
-          description: Recetas completas guardadas de la cuenta autenticada
+          description: Recetas persistidas; Created/Loading/Error pueden no tener instrucciones todavía.
+            Ready requiere instrucciones completas.
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/RecipeDto"
+                $ref: '#/components/schemas/RecipeDto'
         '400':
           description: Identificador de receta inválido
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: VALIDATION_ERROR
                 message: Identificador de receta inválido
@@ -92,7 +94,7 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: UNAUTHORIZED
                 message: Se requiere un token Bearer válido
@@ -101,7 +103,7 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: FORBIDDEN
                 message: Acceso al servicio no permitido
@@ -110,7 +112,7 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: NOT_FOUND
                 message: Receta no encontrada
@@ -119,7 +121,7 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: INTERNAL_ERROR
                 message: Error interno o contenido persistido inválido
@@ -128,7 +130,7 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/ApiErrorResponse"
+                $ref: '#/components/schemas/ApiErrorResponse'
               example:
                 code: SERVICE_UNAVAILABLE
                 message: Servicio temporalmente no disponible
@@ -136,12 +138,12 @@ paths:
       - name: recipeId
         in: path
         required: true
-        description: ID opaco no blanco, codificado como un único segmento y decodificado
-          una vez. No exige UUID. Inexistente o ajeno devuelve el mismo 404.
+        description: ID opaco no blanco, codificado como un único segmento y decodificado una vez. No
+          exige UUID. Inexistente o ajeno devuelve el mismo 404.
         schema:
           type: string
           minLength: 1
-  "/health":
+  /health:
     get:
       operationId: health
       responses:
@@ -152,6 +154,149 @@ paths:
               schema:
                 type: string
               example: OK
+  /v1/recipe:
+    post:
+      operationId: createRecipe
+      tags:
+      - Recipes
+      security:
+      - bearerAuth: []
+      description: Consulta configuración de IA y bebés de la cuenta, persiste la receta inicial y devuelve
+        Created. La generación continúa fuera del HTTP. Cada POST aceptado crea una receta nueva; sin
+        reintentos ni recuperación tras reinicio.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRecipeRequest'
+            example:
+              babyIds:
+              - baby-id
+              ingredients:
+              - name: Patata
+                category: vegetables
+                allergens: []
+              cookingMethods:
+              - steam
+      responses:
+        '200':
+          description: Receta inicial persistida, status Created. No espera al LLM.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeDto'
+        '400':
+          description: Solicitud de creación inválida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          description: Bearer ausente o inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '403':
+          description: Acceso no permitido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '404':
+          description: Bebé no disponible para esta cuenta. Código BABY_NOT_FOUND.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '502':
+          description: Respuesta inválida de AI Configuration o Babies. Código DEPENDENCY_ERROR.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          description: Auth, servicios dependientes o Firestore indisponibles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '500':
+          description: Error interno.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /v1/recipe/{recipeId}/images/{imageId}:
+    get:
+      operationId: getRecipeImage
+      tags:
+      - Recipes
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - name: imageId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: JPEG privado; requiere Bearer de la cuenta propietaria.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: private, no-store
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Identificadores inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '401':
+          description: Bearer ausente o inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '403':
+          description: Acceso no permitido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '404':
+          description: Receta o imagen inexistente o ajena.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          description: Almacenamiento o Auth indisponible.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '500':
+          description: Error interno o referencia persistida inválida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -166,12 +311,12 @@ components:
           type: string
           format: uri
           minLength: 1
-          pattern: "^https?://"
+          pattern: ^https?://
         altText:
           type: string
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
       required:
       - url
       nullable: true
@@ -181,11 +326,11 @@ components:
         id:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         name:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
       required:
       - id
       - name
@@ -195,11 +340,11 @@ components:
         code:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         name:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
       required:
       - code
       - name
@@ -209,22 +354,22 @@ components:
         id:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         title:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         babies:
           type: array
           items:
-            "$ref": "#/components/schemas/RecipeBabyDto"
+            $ref: '#/components/schemas/RecipeBabyDto'
           minItems: 1
         allergens:
           type: array
           items:
-            "$ref": "#/components/schemas/RecipeAllergenDto"
+            $ref: '#/components/schemas/RecipeAllergenDto'
         coverImage:
-          "$ref": "#/components/schemas/RecipeImageDto"
+          $ref: '#/components/schemas/RecipeImageDto'
         recommendedAgeMonths:
           type: integer
           minimum: 0
@@ -237,7 +382,7 @@ components:
           type: string
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         tags:
           type: array
           items:
@@ -254,14 +399,14 @@ components:
         name:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         allergens:
           type: array
           items:
-            "$ref": "#/components/schemas/RecipeAllergenDto"
+            $ref: '#/components/schemas/RecipeAllergenDto'
         category:
           type: string
-          description: Categoría persistida obligatoria, también para ingredientes libres y recetas Loading/Error.
+          description: Categoría explícita obligatoria en todos los estados, incluidos Created/Loading/Error.
           enum:
           - vegetables
           - fruit
@@ -275,7 +420,7 @@ components:
           type: string
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         quantity:
           type: number
           format: double
@@ -286,12 +431,12 @@ components:
           type: string
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         preparation:
           type: string
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
       required:
       - name
       - allergens
@@ -302,22 +447,22 @@ components:
         id:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         text:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         title:
           type: string
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         durationMinutes:
           type: integer
           minimum: 0
           nullable: true
         image:
-          "$ref": "#/components/schemas/RecipeImageDto"
+          $ref: '#/components/schemas/RecipeImageDto'
       required:
       - id
       - text
@@ -327,13 +472,13 @@ components:
         id:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         text:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         image:
-          "$ref": "#/components/schemas/RecipeImageDto"
+          $ref: '#/components/schemas/RecipeImageDto'
       required:
       - id
       - text
@@ -347,8 +492,8 @@ components:
         steps:
           type: array
           items:
-            "$ref": "#/components/schemas/RecipeStepDto"
-          minItems: 1
+            $ref: '#/components/schemas/RecipeStepDto'
+          minItems: 0
       required:
       - type
       - steps
@@ -365,8 +510,8 @@ components:
         paragraphs:
           type: array
           items:
-            "$ref": "#/components/schemas/RecipeParagraphDto"
-          minItems: 1
+            $ref: '#/components/schemas/RecipeParagraphDto'
+          minItems: 0
       required:
       - type
       - paragraphs
@@ -375,28 +520,29 @@ components:
         - steps
     RecipeInstructionsDto:
       oneOf:
-      - "$ref": "#/components/schemas/RecipeStepsDto"
-      - "$ref": "#/components/schemas/RecipeNarrativeDto"
+      - $ref: '#/components/schemas/RecipeStepsDto'
+      - $ref: '#/components/schemas/RecipeNarrativeDto'
       discriminator:
         propertyName: type
         mapping:
-          steps: "#/components/schemas/RecipeStepsDto"
-          narrative: "#/components/schemas/RecipeNarrativeDto"
+          steps: '#/components/schemas/RecipeStepsDto'
+          narrative: '#/components/schemas/RecipeNarrativeDto'
     RecipeDto:
       type: object
       properties:
         status:
           type: string
           enum:
+          - Created
           - Loading
           - Ready
           - Error
         summary:
-          "$ref": "#/components/schemas/RecipeSummaryDto"
+          $ref: '#/components/schemas/RecipeSummaryDto'
         ingredients:
           type: array
           items:
-            "$ref": "#/components/schemas/RecipeIngredientDto"
+            $ref: '#/components/schemas/RecipeIngredientDto'
           minItems: 1
         cookingMethods:
           type: array
@@ -404,7 +550,7 @@ components:
             type: string
           minItems: 1
         instructions:
-          "$ref": "#/components/schemas/RecipeInstructionsDto"
+          $ref: '#/components/schemas/RecipeInstructionsDto'
         imageMode:
           type: string
           enum:
@@ -415,7 +561,7 @@ components:
           type: string
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         preparationMinutes:
           type: integer
           minimum: 0
@@ -432,24 +578,24 @@ components:
           type: string
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         adaptationNotes:
           type: string
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         createdAt:
           type: string
           format: date-time
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         updatedAt:
           type: string
           format: date-time
           nullable: true
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
       required:
       - status
       - summary
@@ -457,13 +603,33 @@ components:
       - cookingMethods
       - instructions
       - imageMode
+      allOf:
+      - oneOf:
+        - type: object
+          properties:
+            status:
+              type: string
+              enum:
+              - Ready
+            instructions:
+              oneOf:
+              - $ref: '#/components/schemas/ReadyRecipeStepsDto'
+              - $ref: '#/components/schemas/ReadyRecipeNarrativeDto'
+        - type: object
+          properties:
+            status:
+              type: string
+              enum:
+              - Created
+              - Loading
+              - Error
     RecipesResponseDto:
       type: object
       properties:
         recipes:
           type: array
           items:
-            "$ref": "#/components/schemas/RecipeDto"
+            $ref: '#/components/schemas/RecipeDto'
       required:
       - recipes
     ApiErrorResponse:
@@ -472,11 +638,69 @@ components:
         code:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
         message:
           type: string
           minLength: 1
-          pattern: "\\S"
+          pattern: \S
       required:
       - code
       - message
+    ReadyRecipeStepsDto:
+      allOf:
+      - $ref: '#/components/schemas/RecipeStepsDto'
+      - type: object
+        properties:
+          steps:
+            type: array
+            minItems: 1
+    ReadyRecipeNarrativeDto:
+      allOf:
+      - $ref: '#/components/schemas/RecipeNarrativeDto'
+      - type: object
+        properties:
+          paragraphs:
+            type: array
+            minItems: 1
+    CreateRecipeRequest:
+      type: object
+      required:
+      - babyIds
+      - ingredients
+      - cookingMethods
+      properties:
+        babyIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            pattern: \S
+        ingredients:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RecipeIngredientDto'
+        cookingMethods:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            pattern: \S
+        title:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: \S
+        servings:
+          type: integer
+          nullable: true
+          minimum: 1
+        additionalInstructions:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: \S

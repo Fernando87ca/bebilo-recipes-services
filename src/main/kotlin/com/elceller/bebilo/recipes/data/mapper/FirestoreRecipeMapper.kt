@@ -21,6 +21,7 @@ fun Map<String, Any?>.toRecipe(): Recipe = Recipe(
     storageNotes = optionalString("storageNotes"), adaptationNotes = optionalString("adaptationNotes"),
     createdAt = date("createdAt"), updatedAt = date("updatedAt"),
     status = when (string("status")) {
+        "Created" -> RecipeStatus.Created
         "Loading" -> RecipeStatus.Loading
         "Ready" -> RecipeStatus.Ready
         "Error" -> RecipeStatus.Error
