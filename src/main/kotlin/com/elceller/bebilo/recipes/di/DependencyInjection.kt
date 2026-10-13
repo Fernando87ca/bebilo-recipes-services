@@ -51,7 +51,7 @@ fun Application.configureDependencyInjection(overrides: DependencyRegistry.() ->
         provideDefault<GenerationDispatcher> {
             val config = resolve<AppConfig>()
             RecipeGenerationService(resolve(), { resolve<RecipeGenerator>() }, { resolve<RecipeImageGenerator>() },
-                { resolve<RecipeImageStorage>() }, config.publicBaseUrl, config.generationConcurrency,
+                { resolve<RecipeImageStorage>() }, config.generationConcurrency,
                 report = { app.log.warn("Recipe worker: {}", it) }).also { worker ->
                     app.monitor.subscribe(ApplicationStopped) { worker.close() }
                 }
@@ -59,9 +59,7 @@ fun Application.configureDependencyInjection(overrides: DependencyRegistry.() ->
         provideDefault<CreateRecipeUseCase> {
             CreateRecipeUseCase(resolve(), resolve(), { resolve<RecipeWriteRepository>() }, { resolve<GenerationDispatcher>() })
         }
-        provideDefault<GetRecipeImageUseCase> {
-            GetRecipeImageUseCase(resolve(), { resolve<RecipeWriteRepository>() }, { resolve<RecipeImageStorage>() })
-        }
+
     }
 }
 

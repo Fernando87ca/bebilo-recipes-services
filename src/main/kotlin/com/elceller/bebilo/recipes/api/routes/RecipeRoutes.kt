@@ -8,11 +8,8 @@ import com.elceller.bebilo.recipes.domain.usecase.GetRecipeUseCase
 import com.elceller.bebilo.recipes.domain.usecase.ObserveRecipeStatusesUseCase
 import com.elceller.bebilo.recipes.domain.usecase.GetRecipesUseCase
 import com.elceller.bebilo.recipes.domain.usecase.CreateRecipeUseCase
-import com.elceller.bebilo.recipes.domain.usecase.GetRecipeImageUseCase
 import com.elceller.bebilo.recipes.api.request.CreateRecipeRequest
 import io.ktor.server.request.receive
-import io.ktor.server.response.respondBytes
-import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.application
@@ -33,13 +30,6 @@ fun Route.recipeRoutes() {
             val request = call.receive<CreateRecipeRequest>()
             val useCase = call.application.dependencies.resolve<CreateRecipeUseCase>()
             call.respond(useCase(token, request.toDomain()).toResponse())
-        }
-        get("/recipe/{recipeId}/images/{imageId}") {
-            val token = call.bearerToken()
-            val useCase = call.application.dependencies.resolve<GetRecipeImageUseCase>()
-            call.response.headers.append(HttpHeaders.CacheControl, "private, no-store")
-            call.respondBytes(useCase(token, call.pathParameters["recipeId"].orEmpty(),
-                call.pathParameters["imageId"].orEmpty()), ContentType.Image.JPEG)
         }
         get("/recipes") {
             val token = call.bearerToken()

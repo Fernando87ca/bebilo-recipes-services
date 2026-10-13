@@ -29,7 +29,7 @@ import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class FirestoreRecipeRepository(private val firestore: Firestore) : RecipeRepository, RecipeWriteRepository,
+class FirestoreRecipeRepository(internal val firestore: Firestore) : RecipeRepository, RecipeWriteRepository,
     RecipeStatusRepository, AutoCloseable {
     override suspend fun create(ownerUid: String, recipe: Recipe, context: GenerationContext): String = storageCall {
         recipe.validateStoredContent()
@@ -51,16 +51,6 @@ class FirestoreRecipeRepository(private val firestore: Firestore) : RecipeReposi
                 .update(recipe.toStorageMap() + ("generationImages" to images))
                 .await()
         }
-    }
-
-    override suspend fun imagePath(ownerUid: String, recipeId: String, imageId: String): String? = storageCall {
-        val documents = collection(ownerUid).whereEqualTo("summary.id", recipeId).get().await().documents
-        if (documents.size > 1) throw InvalidStoredRecipeException()
-        val document = documents.singleOrNull() ?: return@storageCall null
-        val references = document.get("generationImages") as? Map<*, *> ?: return@storageCall null
-        val path = references[imageId] as? String ?: return@storageCall null
-        if (path != "recipe-images/$ownerUid/${document.id}/$imageId.jpg") throw InvalidStoredRecipeException()
-        path
     }
 
     override suspend fun getAll(ownerUid: String): List<Recipe> = storageCall {

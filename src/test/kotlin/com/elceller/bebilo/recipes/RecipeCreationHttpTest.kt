@@ -48,7 +48,7 @@ class RecipeCreationHttpTest {
         }
         assertEquals(HttpStatusCode.Unauthorized, client.post("/v1/recipe") { contentType(ContentType.Application.Json); setBody(Json.encodeToString(creationRequest())) }.status)
     }
-    @Test fun `HTTP returns Created while composition is blocked and images require ownership`() = testApplication {
+    @Test fun `HTTP returns Created while composition is blocked and image route is removed`() = testApplication {
         val repo = MemoryRecipes(); val entered = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>(); val done = CompletableDeferred<Unit>()
         val jobs = mutableListOf<GenerationJob>()
         val workerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -64,10 +64,9 @@ class RecipeCreationHttpTest {
             }
         }
         val worker = com.elceller.bebilo.recipes.domain.usecase.RecipeGenerationService(writes, { generator }, { error("unused") }, { error("unused") },
-            "https://example.com", scope = workerScope)
+            scope = workerScope)
         val storage = object : RecipeImageStorage {
             override suspend fun upload(ownerUid: String, documentId: String, imageId: String, bytes: ByteArray) = error("unused")
-            override suspend fun read(path: String) = byteArrayOf(1, 2, 3)
         }
         application { module {
             provide<AuthUserRepository> { creationAuth() }; provide<CreationContextRepository> { creationContexts() }
@@ -81,15 +80,12 @@ class RecipeCreationHttpTest {
             assertEquals(RecipeStatusDto.Created, value.status)
             withTimeout(5000) { entered.await() }; assertFalse(done.isCompleted)
             release.complete(Unit); withTimeout(5000) { done.await() }
-            repo.images["uid" to jobs.single().documentId] = mapOf("image" to "private-path")
             val path = "/v1/recipe/${value.summary.id}/images/image"
-            val image = client.get(path) { bearerAuth("token") }
-            assertEquals(HttpStatusCode.OK, image.status); assertEquals(ContentType.Image.JPEG, image.contentType())
-            assertArrayEquals(byteArrayOf(1, 2, 3), image.bodyAsBytes())
-            assertEquals("private, no-store", image.headers[HttpHeaders.CacheControl])
-            assertEquals(HttpStatusCode.Unauthorized, client.get(path).status)
-            assertEquals(HttpStatusCode.NotFound, client.get(path) { bearerAuth("other") }.status)
-            assertEquals(HttpStatusCode.NotFound, client.get("/v1/recipe/absent/images/image") { bearerAuth("token") }.status)
+            for (token in listOf(null, "token", "other")) {
+                assertEquals(HttpStatusCode.NotFound, client.get(path) { token?.let { bearerAuth(it) } }.status)
+            }
+            assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/recipe/${value.summary.id}").status)
+            assertEquals(HttpStatusCode.NotFound, client.get("/v1/recipe/${value.summary.id}") { bearerAuth("other") }.status)
         } finally { release.complete(Unit); worker.close() }
     }
 }

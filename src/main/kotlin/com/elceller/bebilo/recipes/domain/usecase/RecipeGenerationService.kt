@@ -2,7 +2,6 @@ package com.elceller.bebilo.recipes.domain.usecase
 
 import com.elceller.bebilo.recipes.domain.model.*
 import com.elceller.bebilo.recipes.domain.repository.*
-import io.ktor.http.encodeURLPathPart
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -14,7 +13,6 @@ class RecipeGenerationService(
     private val generator: suspend () -> RecipeGenerator,
     private val imageGenerator: suspend () -> RecipeImageGenerator,
     private val imageStorage: suspend () -> RecipeImageStorage,
-    private val publicBaseUrl: String,
     concurrency: Int = 2,
     private val report: (String) -> Unit = {},
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
@@ -49,9 +47,8 @@ class RecipeGenerationService(
                         val photoStorage = imageStorage()
                         val bytes = imageGenerator().generate(image.prompt)
                         val id = UUID.randomUUID().toString()
-                        val path = photoStorage.upload(job.ownerUid, job.documentId, id, bytes)
-                        val url = "${publicBaseUrl.trimEnd('/')}/v1/recipe/${current.summary.id.encodeURLPathPart()}/images/$id"
-                        Triple(id, path, attachImage(current, image.instructionId, RecipeImage(url, image.altText)))
+                        val stored = photoStorage.upload(job.ownerUid, job.documentId, id, bytes)
+                        Triple(id, stored.path, attachImage(current, image.instructionId, RecipeImage(stored.url, image.altText)))
                     } catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { report("IMAGE_GENERATION_OR_UPLOAD_FAILED"); null }
                     if (attached != null) {
@@ -98,14 +95,15 @@ fun validateComposition(job: GenerationJob, recipe: Recipe) {
 }
 
 fun validateImagePlan(recipe: Recipe, plan: List<PlannedImage>) {
-    require(plan.count { it.instructionId == null } == 1)
+    require(plan.count { it.instructionId == null } <= 1)
     require(plan.map { it.instructionId }.distinct().size == plan.size)
     val ids = when (val instructions = recipe.instructions) {
         is RecipeInstructions.Steps -> instructions.steps.map { it.id }
         is RecipeInstructions.Narrative -> instructions.paragraphs.map { it.id }
     }
     require(plan.all { it.prompt.isNotBlank() && it.altText.isNotBlank() && (it.instructionId == null || it.instructionId in ids) })
-    require(recipe.imageMode != RecipeImageMode.Cover || plan.size == 1)
+    require(recipe.imageMode != RecipeImageMode.Cover || plan.all { it.instructionId == null })
+    require(recipe.imageMode != RecipeImageMode.None || plan.isEmpty())
 }
 
 private fun attachImage(recipe: Recipe, target: String?, image: RecipeImage): Recipe = if (target == null)

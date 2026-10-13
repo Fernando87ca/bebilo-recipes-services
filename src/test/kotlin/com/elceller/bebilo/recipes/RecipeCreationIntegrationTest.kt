@@ -37,11 +37,8 @@ class RecipeCreationIntegrationTest {
                 assertEquals(result, repository.get(uid, created.summary.id))
                 assertEquals(context, reference.get().get().get("generationContext"))
             }
-            assertEquals(path, repository.imagePath(uid, created.summary.id, "image-1"))
-            assertNull(repository.imagePath("other-$uid", created.summary.id, "image-1"))
-            assertNull(repository.imagePath(uid, created.summary.id, "unknown"))
-            reference.update("generationImages", mapOf("image-1" to "profile-photos/other/private.jpg")).get()
-            assertThrows(InvalidStoredRecipeException::class.java) { runBlocking { repository.imagePath(uid, created.summary.id, "image-1") } }
+            assertEquals(images, reference.get().get().get("generationImages"))
+            assertNull(repository.get("other-$uid", created.summary.id))
             assertThrows(InvalidStoredRecipeException::class.java) { runBlocking { repository.save(uid, job.documentId, created.copy(status = RecipeStatus.Ready)) } }
         } finally {
             jobs.forEach { firestore.collection("users").document(uid).collection("recipes").document(it.documentId).delete().get() }

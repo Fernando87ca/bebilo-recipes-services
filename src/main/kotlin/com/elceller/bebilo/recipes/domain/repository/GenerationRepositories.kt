@@ -10,7 +10,6 @@ interface CreationContextRepository {
 interface RecipeWriteRepository {
     suspend fun create(ownerUid: String, recipe: Recipe, context: GenerationContext): String
     suspend fun save(ownerUid: String, documentId: String, recipe: Recipe, images: Map<String, String> = emptyMap())
-    suspend fun imagePath(ownerUid: String, recipeId: String, imageId: String): String?
 }
 
 interface RecipeGenerator {
@@ -19,9 +18,10 @@ interface RecipeGenerator {
 }
 
 interface RecipeImageGenerator { suspend fun generate(prompt: String): ByteArray }
+data class StoredRecipeImage(val path: String, val url: String)
+
 interface RecipeImageStorage {
-    suspend fun upload(ownerUid: String, documentId: String, imageId: String, bytes: ByteArray): String
-    suspend fun read(path: String): ByteArray
+    suspend fun upload(ownerUid: String, documentId: String, imageId: String, bytes: ByteArray): StoredRecipeImage
 }
 
 fun interface GenerationDispatcher { fun submit(job: GenerationJob) }

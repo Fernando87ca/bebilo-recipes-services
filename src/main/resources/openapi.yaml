@@ -283,75 +283,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
-  /v1/recipe/{recipeId}/images/{imageId}:
-    get:
-      operationId: getRecipeImage
-      tags:
-      - Recipes
-      security:
-      - bearerAuth: []
-      parameters:
-      - name: recipeId
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: imageId
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      responses:
-        '200':
-          description: JPEG privado; requiere Bearer de la cuenta propietaria.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-              example: private, no-store
-          content:
-            image/jpeg:
-              schema:
-                type: string
-                format: binary
-        '400':
-          description: Identificadores inválidos.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-        '401':
-          description: Bearer ausente o inválido.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-        '403':
-          description: Acceso no permitido.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-        '404':
-          description: Receta o imagen inexistente o ajena.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-        '503':
-          description: Almacenamiento o Auth indisponible.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-        '500':
-          description: Error interno o referencia persistida inválida.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -375,6 +307,7 @@ components:
         status:
           $ref: '#/components/schemas/RecipeStatusDto'
     RecipeImageDto:
+      description: Imagen opcional. URL de Firebase con token sin caducidad automática; cualquiera que conozca el enlace puede descargarla hasta su revocación o eliminación del archivo.
       type: object
       properties:
         url:

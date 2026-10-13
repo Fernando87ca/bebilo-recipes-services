@@ -84,6 +84,8 @@ JPEG_BASE64 = "/9j/4AAQSkZJRgABAQAASABIAAD/4QBMRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABA
 
 class AuthStub(BaseHTTPRequestHandler):
     objects = {}
+    object_tokens = {}
+    object_versions = {}
     calls = []
     jpeg = base64.b64decode(JPEG_BASE64)
 
@@ -94,10 +96,12 @@ class AuthStub(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(value).encode())
 
     def object_metadata(self, name):
-        return {"kind": "storage#object", "name": name, "bucket": "demo-recipes", "generation": "1", "metageneration": "1", "size": str(len(self.objects[name])), "contentType": "image/jpeg"}
+        return {"kind": "storage#object", "name": name, "bucket": "demo-recipes", "generation": "1", "metageneration": str(self.object_versions.get(name, 1)), "size": str(len(self.objects[name])), "contentType": "image/jpeg", "metadata": self.object_tokens.get(name, {})}
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/storage/v1/b/demo-recipes":
+            return self.json_response({"kind": "storage#bucket", "name": "demo-recipes", "id": "demo-recipes"})
         if parsed.path == "/stats":
             return self.json_response(self.calls)
         if parsed.path.startswith(("/storage/v1/b/demo-recipes/o/", "/download/storage/v1/b/demo-recipes/o/")):
@@ -108,6 +112,14 @@ class AuthStub(BaseHTTPRequestHandler):
                 self.send_response(200); self.send_header("Content-Type", "image/jpeg"); self.end_headers()
                 return self.wfile.write(self.objects[name])
             return self.json_response(self.object_metadata(name))
+        if parsed.path.startswith("/v0/b/demo-recipes/o/"):
+            name = urllib.parse.unquote(parsed.path.split("/o/", 1)[1])
+            token = urllib.parse.parse_qs(parsed.query).get("token", [None])[0]
+            expected = self.object_tokens.get(name, {}).get("firebaseStorageDownloadTokens")
+            if not expected or token != expected:
+                return self.json_response({"error": "invalid download token"}, 403)
+            self.send_response(200); self.send_header("Content-Type", "image/jpeg"); self.end_headers()
+            return self.wfile.write(self.objects[name])
         token = self.headers.get("Authorization", "").removeprefix("Bearer ")
         if token not in ("a", "b", "empty"):
             return self.json_response({"code": "UNAUTHORIZED"}, 401)
@@ -116,7 +128,7 @@ class AuthStub(BaseHTTPRequestHandler):
         if parsed.path == "/v1/get-babies":
             return self.json_response([{"id": "baby-" + token, "name": "Fixture", "ageMonths": 8, "feedingStage": "Puré", "preferredTexture": "suave", "restrictions": ["sin leche"], "foodInterest": "", "description": ""}])
         self.json_response({}, 404)
-    def do_POST(self):
+    def read_body(self):
         if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
             chunks = []
             while True:
@@ -130,8 +142,39 @@ class AuthStub(BaseHTTPRequestHandler):
             raw_body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
         if self.headers.get("Content-Encoding") == "gzip":
             raw_body = gzip.decompress(raw_body)
+        return raw_body
+
+    def do_PATCH(self):
+        return self.patch_metadata(self.read_body())
+
+    def patch_metadata(self, raw_body):
+        parsed = urllib.parse.urlparse(self.path)
+        assert parsed.path.startswith("/storage/v1/b/demo-recipes/o/")
+        name = urllib.parse.unquote(parsed.path.split("/o/", 1)[1])
+        expected = urllib.parse.parse_qs(parsed.query).get("ifMetagenerationMatch", [None])[0]
+        if expected != str(self.object_versions.get(name, 1)):
+            return self.json_response({"error": {"code": 412, "message": "metadata changed"}}, 412)
+        data = json.loads(raw_body)
+        # GCS PATCH merges custom metadata keys; it does not replace unchanged entries.
+        for key, value in data["metadata"].items():
+            if value is None:
+                self.object_tokens[name].pop(key, None)
+            else:
+                self.object_tokens[name][key] = value
+        self.object_versions[name] = self.object_versions.get(name, 1) + 1
+        return self.json_response(self.object_metadata(name))
+
+    def do_POST(self):
+        raw_body = self.read_body()
+        # The Java SDK tunnels PATCH through POST with X-HTTP-Method-Override.
+        if self.path.startswith("/storage/v1/b/demo-recipes/o/"):
+            return self.patch_metadata(raw_body)
         body = {} if self.path.startswith("/upload/") else json.loads(raw_body)
         token = body.get("token")
+        if self.path == "/fixture-remove-token":
+            self.object_tokens[body["name"]] = {"unrelated": "keep"}
+            return self.json_response({})
+
         if self.path.startswith("/upload/storage/v1/b/demo-recipes/o"):
             # The SDK uses a metadata+binary multipart upload; emulate its real HTTP boundary.
             message = email.parser.BytesParser(policy=email.policy.default).parsebytes(
@@ -139,6 +182,8 @@ class AuthStub(BaseHTTPRequestHandler):
             parts = list(message.iter_parts())
             metadata = json.loads(parts[0].get_payload(decode=True))
             self.objects[metadata["name"]] = parts[1].get_payload(decode=True)
+            self.object_tokens[metadata["name"]] = metadata.get("metadata", {})
+            assert self.object_tokens[metadata["name"]].get("firebaseStorageDownloadTokens")
             return self.json_response(self.object_metadata(metadata["name"]))
         if self.path == "/v1/responses":
             assert self.headers["Authorization"] == "Bearer smoke-dummy-key"
@@ -417,15 +462,22 @@ def main():
                     images = [generated["summary"]["coverImage"], generated["instructions"]["paragraphs"][0]["image"]]
                     assert generated["instructions"]["paragraphs"][1].get("image") is None
                     for image in images:
-                        image_path = urllib.parse.urlparse(image["url"]).path
-                        req = urllib.request.Request(GATEWAY + image_path, headers={"Authorization": "Bearer b", "Host": "api.bebilo.localhost"})
-                        with urllib.request.urlopen(req, timeout=10) as response:
-                            assert response.headers["Content-Type"] == "image/jpeg"
-                            assert response.headers["Cache-Control"] == "private, no-store"
-                            assert response.read() == AuthStub.jpeg
-                        assert request(GATEWAY + image_path, "a", gateway=True)[0] == 404
-                        assert request(GATEWAY + image_path, gateway=True)[0] == 401
+                        parsed = urllib.parse.urlparse(image["url"])
+                        assert parsed.scheme == "https" and parsed.netloc == "firebasestorage.googleapis.com"
+                        assert "Expires" not in parsed.query and "token=" in parsed.query
+                        # Download through the Firebase HTTP double inside the isolated Docker network, without Bearer.
+                        url = "http://localhost:8080" + parsed.path + "?" + parsed.query
+                        code = "import urllib.request,base64; print(base64.b64encode(urllib.request.urlopen(" + repr(url) + ").read()).decode())"
+                        downloaded = subprocess.check_output(["docker", "exec", names[2], "python", "-c", code], text=True).strip()
+                        assert base64.b64decode(downloaded) == AuthStub.jpeg
+                        invalid_url = "http://localhost:8080" + parsed.path + "?alt=media&token=wrong"
+                        code = "import urllib.request,urllib.error\ntry: urllib.request.urlopen(" + repr(invalid_url) + ")\nexcept urllib.error.HTTPError as e: print(e.code)"
+                        assert subprocess.check_output(["docker", "exec", names[2], "python", "-c", code], text=True).strip() == "403"
                         checks += 3
+                    old_path = f"{GATEWAY}/recipes/v1/recipe/{created['summary']['id']}/images/removed"
+                    assert request(old_path, "b", gateway=True)[0] == 404
+                    assert request(old_path, gateway=True)[0] == 404
+                    checks += 2
             failed = create("a", "FAIL")
             assert finished("a", failed["summary"]["id"])[0]["status"] == "Error"
             checks += 2
@@ -447,6 +499,47 @@ def main():
                     assert "smoke-dummy-key" not in json.dumps(document["fields"])
                     assert document["name"].rsplit("/", 1)[1] != generated["summary"]["id"]
                     checks += 1
+            # Convert a generated fixture to the previous contract and exercise the actual offline CLI.
+            legacy_doc = next(d for d in json.loads(listed)["documents"] if "generationContext" in d["fields"])
+            fields = legacy_doc["fields"]
+            images = [fields["summary"]["mapValue"]["fields"]["coverImage"]["mapValue"]["fields"],
+                      fields["instructions"]["mapValue"]["fields"]["paragraphs"]["arrayValue"]["values"][0]["mapValue"]["fields"]["image"]["mapValue"]["fields"]]
+            public_id = fields["summary"]["mapValue"]["fields"]["id"]["stringValue"]
+            original_urls = [i["url"]["stringValue"] for i in images]
+            for index, image in enumerate(images):
+                parsed = urllib.parse.urlparse(image["url"]["stringValue"])
+                object_path = urllib.parse.unquote(parsed.path.split("/o/", 1)[1])
+                if index == 1:
+                    # Historical objects may have no Firebase download token: retain other metadata.
+                    payload = json.dumps({"name": object_path}).encode()
+                    code = "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://localhost:8080/fixture-remove-token',data=" + repr(payload) + ",headers={'Content-Type':'application/json'})).read()"
+                    subprocess.check_call(["docker", "exec", names[2], "python", "-c", code])
+                image_id = object_path.rsplit("/", 1)[1].removesuffix(".jpg")
+                image["url"] = {"stringValue": "http://api.bebilo.localhost:18088/recipes/v1/recipe/" + urllib.parse.quote(public_id, safe="") + "/images/" + image_id}
+            fixture_url = DOCUMENTS + "/" + legacy_doc["name"].split("/documents/", 1)[1]
+            assert request(fixture_url, method="PATCH", data={"fields": fields})[0] == 200
+            command = ["docker", "exec", names[3], "/opt/recipe-services-1.0-SNAPSHOT/bin/recipe-services"]
+            inventory = subprocess.check_output(command + ["--inventory-image-urls"], text=True)
+            assert "bucketAvailable=true" in inventory and "legacyRecipes=1 changed=0 issues=0" in inventory
+            assert json.loads(request(fixture_url)[1])["fields"] == fields  # Inventory does not write.
+            applied_result = subprocess.run(command + ["--migrate-image-urls"], stdout=subprocess.PIPE, text=True)
+            assert applied_result.returncode == 0, applied_result.stdout
+            applied = applied_result.stdout
+            assert "legacyRecipes=1 changed=1 issues=0" in applied
+            migrated = json.loads(request(fixture_url)[1])["fields"]
+            assert migrated["summary"]["mapValue"]["fields"]["coverImage"]["mapValue"]["fields"]["url"]["stringValue"] == original_urls[0]
+            process_url = migrated["instructions"]["mapValue"]["fields"]["paragraphs"]["arrayValue"]["values"][0]["mapValue"]["fields"]["image"]["mapValue"]["fields"]["url"]["stringValue"]
+            assert process_url != original_urls[1] and "token=" in process_url
+            parsed = urllib.parse.urlparse(process_url)
+            object_path = urllib.parse.unquote(parsed.path.split("/o/", 1)[1])
+            metadata_url = "http://localhost:8080/storage/v1/b/demo-recipes/o/" + urllib.parse.quote(object_path, safe="")
+            code = "import urllib.request,json; print(json.loads(urllib.request.urlopen(" + repr(metadata_url) + ").read())['metadata']['unrelated'])"
+            assert subprocess.check_output(["docker", "exec", names[2], "python", "-c", code], text=True).strip() == "keep"
+            assert migrated["updatedAt"] == fields["updatedAt"] and migrated["status"] == fields["status"]
+            repeated = subprocess.check_output(command + ["--migrate-image-urls"], text=True)
+            assert "legacyRecipes=0 changed=0 issues=0" in repeated
+            assert json.loads(request(fixture_url)[1])["fields"] == migrated
+            checks += 9
             print(f"PASS: {checks} checks; real Recipes + Koog + Firebase SDKs + Firestore Emulator + Traefik; Auth/AI Configuration/Babies/OpenAI/GCS doubles. No real Firebase or LLM calls.")
         except Exception:
             for name in started:

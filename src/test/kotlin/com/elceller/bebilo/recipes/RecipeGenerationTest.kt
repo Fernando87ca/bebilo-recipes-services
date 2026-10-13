@@ -39,10 +39,7 @@ class MemoryRecipes : RecipeWriteRepository, RecipeRepository {
     }
     override suspend fun getAll(ownerUid: String) = values.filterKeys { it.first == ownerUid }.values.toList()
     override suspend fun get(ownerUid: String, recipeId: String) = getAll(ownerUid).singleOrNull { it.summary.id == recipeId }
-    override suspend fun imagePath(ownerUid: String, recipeId: String, imageId: String): String? {
-        val entry = values.entries.singleOrNull { it.key.first == ownerUid && it.value.summary.id == recipeId } ?: return null
-        return images[entry.key]?.get(imageId)
-    }
+
 }
 
 fun creationRequest() = CreateRecipeRequest(listOf("baby-1"),
@@ -81,10 +78,9 @@ class RecipeGenerationTest {
                 if (failure == "image") error("image failed"); return byteArrayOf(1)
             } }
             val storage = object : RecipeImageStorage {
-                override suspend fun upload(ownerUid: String, documentId: String, imageId: String, bytes: ByteArray): String = error("storage unavailable")
-                override suspend fun read(path: String): ByteArray = error("unused")
+                override suspend fun upload(ownerUid: String, documentId: String, imageId: String, bytes: ByteArray): StoredRecipeImage = error("storage unavailable")
             }
-            val worker = RecipeGenerationService(repo, { generator }, { imageGenerator }, { storage }, "https://example.com",
+            val worker = RecipeGenerationService(repo, { generator }, { imageGenerator }, { storage },
                 report = reports::add, scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)))
             worker.submit(jobs.single()); advanceUntilIdle()
             val value = repo.values.values.single()
@@ -144,7 +140,7 @@ class RecipeGenerationTest {
             override suspend fun planImages(context: GenerationContext, recipe: Recipe) = emptyList<PlannedImage>()
         }
         val workerScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
-        val worker = RecipeGenerationService(repo, { generator }, { error("images") }, { error("storage") }, "https://example.com/recipes", scope = workerScope)
+        val worker = RecipeGenerationService(repo, { generator }, { error("images") }, { error("storage") }, scope = workerScope)
         val create = CreateRecipeUseCase(creationAuth(), creationContexts(), { repo }, { worker })
         val requestJob = launch { repeat(3) { create("token", creationRequest().toDomain()) }; awaitCancellation() }
         runCurrent()
@@ -182,10 +178,9 @@ class RecipeGenerationTest {
                 imageCalls++; if (prompt == "Proceso") error("failed image"); return byteArrayOf(1)
             } }
             val storage = object : RecipeImageStorage {
-                override suspend fun upload(ownerUid: String, documentId: String, imageId: String, bytes: ByteArray) = "recipe-images/$ownerUid/$documentId/$imageId.jpg"
-                override suspend fun read(path: String) = byteArrayOf(1)
+                override suspend fun upload(ownerUid: String, documentId: String, imageId: String, bytes: ByteArray) = StoredRecipeImage("recipe-images/$ownerUid/$documentId/$imageId.jpg", "https://firebasestorage.googleapis.com/v0/b/demo/o/image?alt=media&token=test")
             }
-            val actual = RecipeGenerationService(repo, { generator }, { images }, { storage }, "https://example.com", scope = workerScope)
+            val actual = RecipeGenerationService(repo, { generator }, { images }, { storage }, scope = workerScope)
             actual.submit(jobs.single()); advanceUntilIdle()
             val result = repo.values.values.single()
             assertEquals(RecipeStatus.Ready, result.status)
@@ -206,7 +201,7 @@ class RecipeGenerationTest {
             }
             override suspend fun planImages(context: GenerationContext, recipe: Recipe) = emptyList<PlannedImage>()
         }
-        val worker = RecipeGenerationService(repo, { agent }, { error("unused") }, { error("unused") }, "https://example.com",
+        val worker = RecipeGenerationService(repo, { agent }, { error("unused") }, { error("unused") },
             report = reports::add, scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)))
         jobs.forEach(worker::submit); advanceUntilIdle()
         assertEquals(RecipeStatus.Error, repo.getAll("uid").single().status)

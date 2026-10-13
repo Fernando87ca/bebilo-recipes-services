@@ -28,9 +28,13 @@ requiere contenido textual completo. Conservar ingredientes iniciales, categorí
 Los prompts españoles y schemas están en `src/main/resources/prompts/`; recompilar para cambiarlos.
 No introducir reintentos, reparación LLM ni recuperación tras reinicio.
 
-Las fotos generadas son opcionales para Ready y se guardan en Storage privado. GET
-`/v1/recipe/{recipeId}/images/{imageId}` autentica al propietario y sirve JPEG desde una
-referencia interna validada. No publicar tokens de descarga ni aceptar rutas de bucket del cliente.
+Las fotos generadas son opcionales para Ready, incluida la portada y todos los pasos/párrafos.
+Storage conserva objetos privados con firebaseStorageDownloadTokens; el DTO entrega URLs HTTPS
+sin caducidad automática. Conocer el enlace concede acceso sin Bearer (decisión aceptada para
+fotos culinarias de IA). No hay endpoint de descarga en Recipes. Los GET no crean ni renuevan
+URLs y no escriben metadatos. La migración offline requiere inventario previo, valida propietario
+referencia y objetos, conserva tokens existentes y usa precondiciones contra escrituras concurrentes.
+No registrar URLs ni tokens de descarga en logs/evidencias.
 En desarrollo, la clave OpenAI se lee de `OPENAI_API_KEY` en `local.properties` ignorado.
 En producción puede inyectarse desde Google Secret Manager mediante variable de entorno o
 archivo indicado por `OPENAI_API_KEY_FILE` (con prioridad); nunca registrarla.

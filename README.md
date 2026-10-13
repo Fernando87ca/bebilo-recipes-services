@@ -11,7 +11,6 @@ Servicio Kotlin/Ktor de consulta y creación asíncrona de recetas guardadas por
 | GET `/v1/recipes` | `/recipes/v1/recipes` | `{"recipes":[RecipeDto,...]}` sin filtros ni límite |
 | GET `/v1/recipe/{recipeId}` | `/recipes/v1/recipe/{recipeId}` | `RecipeDto` directo |
 | POST `/v1/recipe` | `/recipes/v1/recipe` | `RecipeDto` inicial con `status: Created` |
-| GET `/v1/recipe/{recipeId}/images/{imageId}` | `/recipes/v1/recipe/{recipeId}/images/{imageId}` | JPEG privado con Bearer |
 
 Bearer Firebase obligatorio. El UID procede únicamente de Auth `POST /v1/user-info`.
 No se acepta identidad de cuenta en body o query. Firebase se resuelve después de autenticar.
@@ -37,11 +36,41 @@ clave derivada del prompt/schema y breakpoint explícito; se registran tokens to
 nunca prompts, tokens ni cuerpos de error del proveedor. No se garantizan hits de caché reales.
 
 La generación guarda texto en Loading antes de intentar fotos. none no genera imágenes; single
-intenta portada; multiple añade procesos relevantes, sin ilustrar automáticamente cada paso.
-Fotos fallidas se omiten y la receta termina Ready si el texto es válido. Las fotos disponibles
-son JPEG privados en `recipe-images/{uid}/{documentId}/{imageId}.jpg`; las URLs apuntan a Recipes
-y necesitan Bearer. No se firman URLs ni se publican tokens de descarga. El bucket real de
-bebilo-dev sigue pendiente de habilitación por facturación; su validación real no está realizada.
+permite como máximo una portada opcional; multiple permite portada e imágenes de procesos
+selectivas en pasos o párrafos. El plan puede estar vacío o ilustrar un proceso sin portada.
+Fotos fallidas se omiten y la receta termina Ready si el texto es válido. Sin imagen, el campo
+opcional puede estar ausente o ser null, nunca lleva una URL vacía.
+
+Los JPEG se guardan en `recipe-images/{uid}/{documentId}/{imageId}.jpg`, sin ACL pública,
+con token aleatorio en `firebaseStorageDownloadTokens`. `coverImage.url` e `image.url` contienen
+el enlace HTTPS directo a Firebase: no caduca automáticamente y cualquiera que lo conozca
+puede descargarlo sin Bearer hasta revocar el token o borrar el archivo. Esta condición está
+aceptada para imágenes culinarias generadas por IA. Los GET siguen autenticados, solo leen
+URLs persistidas y no consultan Storage. La app no necesita renovar enlaces; no debe enviar
+el Bearer de la API a Firebase. No hay ruta `/v1/recipe/{recipeId}/images/{imageId}`.
+
+### Migración de enlaces antiguos
+
+La distribución incluye dos comandos offline (no arrancan HTTP):
+
+```sh
+./build/install/recipe-services/bin/recipe-services --inventory-image-urls
+./build/install/recipe-services/bin/recipe-services --migrate-image-urls
+```
+
+Ejecutar primero inventario con la configuración del despliegue. Devuelve solo contadores y
+estado del bucket, nunca cuentas, URLs ni tokens. La aplicación valida todos los documentos
+antes de escribir; referencias inexistentes, ajenas, URLs antiguas de otro origen, identidades
+duplicadas o documentos inválidos se registran como incidencias (exit 2). Sin incidencias,
+conserva tokens existentes o añade uno preservando otros metadatos; cambia solamente summary
+e instructions mediante precondición updateTime. Storage usa precondición metageneration.
+Puede repetirse: URLs ya migradas no cambian. Si Firestore falla después de guardar un token,
+el siguiente intento conserva ese token. No modifica el estado ni timestamps de la receta.
+`RECIPES_PUBLIC_BASE_URL` identifica exclusivamente el origen histórico permitido en la migración.
+No retirar el servicio anterior si existen referencias antiguas pendientes de migrar.
+
+La disponibilidad real del bucket y el inventario del despliegue se registran en
+[la evidencia del cambio](../docs/changes/recipes-permanent-image-urls/implementation.md).
 
 ## Esquema Firestore
 
