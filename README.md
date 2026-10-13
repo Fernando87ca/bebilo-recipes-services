@@ -7,6 +7,7 @@ Servicio Kotlin/Ktor de consulta y creación asíncrona de recetas guardadas por
 
 | Interna | Pública por gateway | Respuesta 200 |
 | --- | --- | --- |
+| GET `/v1/recipes/events` | `/recipes/v1/recipes/events` | SSE de estados por cuenta |
 | GET `/v1/recipes` | `/recipes/v1/recipes` | `{"recipes":[RecipeDto,...]}` sin filtros ni límite |
 | GET `/v1/recipe/{recipeId}` | `/recipes/v1/recipe/{recipeId}` | `RecipeDto` directo |
 | POST `/v1/recipe` | `/recipes/v1/recipe` | `RecipeDto` inicial con `status: Created` |
@@ -138,3 +139,27 @@ Traefik en 18088; requiere esos puertos libres. Limpia contenedores y la red ais
 Para comprobar el despliegue habitual sin crear datos: `python3 scripts/local-smoke.py`.
 No crea cuentas o recetas en Firebase real. Pruebas con dobles, SDK/emulador y gateway aislado
 se registran por separado; no equivalen a integración móvil real.
+
+## SSE de estados
+
+GET `/v1/recipes/events` con Bearer observa todas las recetas de la cuenta autenticada.
+Respuesta `text/event-stream`, caché `private, no-store`. Al conectar/reconectar envía un evento
+por receta existente y después nuevas recetas y cambios de estado:
+
+```text
+event: recipe-status
+data: {"id":"recipe-id","status":"Loading"}
+
+```
+
+`id` es `summary.id`; `status` admite Created/Loading/Error/Ready. El DTO solo contiene esos
+campos. Ready/Error no cierran conexión. Cambios de texto, fotos o fechas sin cambio de estado
+no emiten eventos; eliminaciones tampoco. Cuenta vacía mantiene conexión con comentario heartbeat
+cada 30 segundos. La app puede recuperar el contenido completo mediante los GET existentes.
+
+La fuente es un listener Firestore por conexión, también detecta escrituras desde otras instancias.
+No hay historial ni ID SSE/replay de Last-Event-ID: pueden omitirse estados intermedios rápidos o
+durante desconexiones. Reconectar vuelve a sincronizar el estado actual. Se valida el primer
+snapshot antes del stream (timeout 10 s → 503); errores anteriores conservan JSON existente.
+Documentos inválidos/IDs duplicados fallan sin resultados parciales. Errores después de abrir o
+cola de 64 lotes llena cierran stream sin JSON; desconexión libera listener. Sin migraciones.

@@ -27,6 +27,8 @@ fun Application.configureDependencyInjection(overrides: DependencyRegistry.() ->
         provideDefault<AuthUserRepository> { AuthServicesUserRepository(resolve<AppConfig>().authServiceBaseUrl) }
         provideDefault<RecipeRepository> { FirestoreRecipeRepository.fromConfig(resolve()) }
         // Resolve storage only after authentication, including invalid bearer tokens.
+        provideDefault<RecipeStatusRepository> { resolve<RecipeRepository>() as RecipeStatusRepository }
+        provideDefault<ObserveRecipeStatusesUseCase> { ObserveRecipeStatusesUseCase(resolve()) { resolve<RecipeStatusRepository>() } }
         provideDefault<GetRecipesUseCase> { GetRecipesUseCase(resolve()) { resolve<RecipeRepository>() } }
         provideDefault<GetRecipeUseCase> { GetRecipeUseCase(resolve()) { resolve<RecipeRepository>() } }
         provideDefault<PromptResources> { prompts }

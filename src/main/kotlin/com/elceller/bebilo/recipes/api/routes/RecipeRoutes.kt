@@ -5,6 +5,7 @@ import com.elceller.bebilo.recipes.data.mapper.toResponse
 import com.elceller.bebilo.recipes.data.mapper.toDomain
 import com.elceller.bebilo.recipes.domain.model.UnauthorizedException
 import com.elceller.bebilo.recipes.domain.usecase.GetRecipeUseCase
+import com.elceller.bebilo.recipes.domain.usecase.ObserveRecipeStatusesUseCase
 import com.elceller.bebilo.recipes.domain.usecase.GetRecipesUseCase
 import com.elceller.bebilo.recipes.domain.usecase.CreateRecipeUseCase
 import com.elceller.bebilo.recipes.domain.usecase.GetRecipeImageUseCase
@@ -22,6 +23,11 @@ import io.ktor.server.routing.*
 
 fun Route.recipeRoutes() {
     route("/v1") {
+        get("/recipes/events") {
+            val token = call.bearerToken()
+            val useCase = call.application.dependencies.resolve<ObserveRecipeStatusesUseCase>()
+            call.streamRecipeStatuses(useCase(token))
+        }
         post("/recipe") {
             val token = call.bearerToken()
             val request = call.receive<CreateRecipeRequest>()

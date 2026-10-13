@@ -8,6 +8,13 @@ Autenticar mediante Auth `/v1/user-info` antes de resolver Firestore. La persist
 `users/{uid}/recipes/{documentId}`; `summary.id` es la identidad pública opaca, independiente
 del documentId. No exigir UUID ni decodificar de nuevo el parámetro ya decodificado por Ktor.
 
+GET `/v1/recipes/events` (pública `/recipes/v1/recipes/events`) mantiene SSE por cuenta:
+primer snapshot y altas/cambios de estado mediante listener Firestore, sin historial/replay.
+Evento `recipe-status` con solo `id` público (`summary.id`) y `status`; heartbeat comentario 30 s.
+Validar snapshots completos y duplicados antes de emitir; contenido sin cambio de estado y
+eliminaciones no emiten. Preflight del mismo listener 10 s antes de abrir; errores iniciales JSON,
+posteriores cierran stream. Cola 64 lotes sin descarte silencioso; retirar listener al cancelar/cerrar.
+
 Los GET no crean, escriben, reparan ni generan contenido y no consultan AIconfig, Babies o Profile.
 Conservar todos los campos persistidos y exigir `status` y `ingredients[].category` explícitos.
 Category admite solo los ocho valores de OpenAPI, sin default, inferencia ni reparación. Documentos inválidos y IDs

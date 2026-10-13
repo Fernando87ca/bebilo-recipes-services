@@ -189,6 +189,35 @@ class AuthStub(BaseHTTPRequestHandler):
         pass
 
 
+def open_status_stream(token):
+    req = urllib.request.Request(f"{GATEWAY}/recipes/v1/recipes/events", headers={
+        "Host": "api.bebilo.localhost", "Authorization": f"Bearer {token}", "Accept": "text/event-stream"})
+    response = urllib.request.urlopen(req, timeout=10)
+    assert response.status == 200
+    assert response.headers["Content-Type"].startswith("text/event-stream")
+    assert response.headers["Cache-Control"] == "private, no-store"
+    return response
+
+
+def read_status_event(response):
+    event = {}
+    while True:
+        raw = response.readline()
+        assert raw, "SSE ended before the expected event"
+        line = raw.decode().rstrip("\r\n")
+        if not line:
+            if not event:
+                continue
+            assert set(event) == {"event", "data"}, event
+            assert event["event"] == "recipe-status"
+            value = json.loads(event["data"])
+            assert set(value) == {"id", "status"}, value
+            return value
+        if not line.startswith(":"):
+            key, value = line.split(":", 1)
+            event[key] = value.lstrip()
+
+
 def main():
     subprocess.run(["docker", "image", "inspect", "recipes-service:local"], check=True, stdout=subprocess.DEVNULL)
     names = ["bebilo-recipes-smoke-firestore", "bebilo-recipes-smoke-traefik", "bebilo-recipes-smoke-auth", "bebilo-recipes-smoke-service"]
@@ -278,13 +307,50 @@ def main():
             assert json.loads(request(f"{GATEWAY}/recipes/v1/recipes", "empty", gateway=True)[1]) == {"recipes": []}
             checks += 2
             for token, expected in [(None, 401), ("invalid", 401), ("forbidden", 403)]:
-                for path in ["recipes", "recipe/absent"]:
+                for path in ["recipes", "recipe/absent", "recipes/events"]:
                     status, body = request(f"{GATEWAY}/recipes/v1/{path}", token, gateway=True)
                     assert status == expected
                     assert json.loads(body)["code"] in ("UNAUTHORIZED", "FORBIDDEN")
                     checks += 1
             assert request(f"{GATEWAY}/recipes/v1/recipe/%20%20", "a", gateway=True)[0] == 400
             checks += 1
+            # Real progressive SSE through Traefik, two same-account connections and another account.
+            sse_id = "sse/one ?#%"
+            sse_url = f"{DOCUMENTS}/users/smoke-a/recipes/sse-physical"
+            with open_status_stream("a") as stream_a, open_status_stream("a") as stream_a2, open_status_stream("b") as stream_b:
+                expected_initial = {value["summary"]["id"]: value["status"] for value in recipes}
+                for stream in [stream_a, stream_a2]:
+                    initial = [read_status_event(stream) for _ in range(25)]
+                    assert {value["id"]: value["status"] for value in initial} == expected_initial
+                assert read_status_event(stream_b) == {"id": "private-b", "status": "Loading"}
+                value = fixture(sse_id)
+                for state in ["Created", "Loading", "Ready", "Loading", "Error"]:
+                    value["status"] = state
+                    assert request(sse_url, method="PATCH", data={"fields": firebase_value(value)["mapValue"]["fields"]})[0] == 200
+                    for stream in [stream_a, stream_a2]:
+                        assert read_status_event(stream) == {"id": sse_id, "status": state}
+                    checks += 2
+                    if state == "Created":
+                        # Same-state content writes must not become the next event.
+                        value["description"] = "Text changed without a status change"
+                        assert request(sse_url, method="PATCH", data={"fields": firebase_value(value)["mapValue"]["fields"]})[0] == 200
+                private_url = f"{DOCUMENTS}/users/smoke-b/recipes/private"
+                private_value = fixture("private-b")
+                private_value["status"] = "Error"
+                assert request(private_url, method="PATCH", data={"fields": firebase_value(private_value)["mapValue"]["fields"]})[0] == 200
+                assert read_status_event(stream_b) == {"id": "private-b", "status": "Error"}
+                # This next event also proves private account changes did not leak to account A.
+                value["status"] = "Ready"
+                assert request(sse_url, method="PATCH", data={"fields": firebase_value(value)["mapValue"]["fields"]})[0] == 200
+                for stream in [stream_a, stream_a2]:
+                    assert read_status_event(stream) == {"id": sse_id, "status": "Ready"}
+                with open_status_stream("a") as reconnected:
+                    initial = [read_status_event(reconnected) for _ in range(26)]
+                    assert {v["id"]: v["status"] for v in initial} == dict(expected_initial, **{sse_id: "Ready"})
+                assert request(private_url, method="PATCH", data={"fields": firebase_value(fixture("private-b"))["mapValue"]["fields"]})[0] == 200
+                assert read_status_event(stream_b) == {"id": "private-b", "status": "Loading"}
+            assert request(sse_url, method="DELETE")[0] == 200
+            checks += 5
             # Duplicate public IDs are corruption, even with different physical document IDs.
             assert request(f"{DOCUMENTS}/users/smoke-a/recipes/duplicate", method="PATCH", data={"fields": firebase_value(fixture(ids[0]))["mapValue"]["fields"]})[0] == 200
             for path in ["recipes", f"recipe/{urllib.parse.quote(ids[0], safe='')}"]:
