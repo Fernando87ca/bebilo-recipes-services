@@ -26,7 +26,7 @@ fun storedRecipe(id: String = "recipe-001", type: String = "steps", mode: String
 )
 fun recipe(id: String = "recipe-001"): Recipe = storedRecipe(id).toRecipe()
 
-val ingredientCategories = listOf("vegetables", "fruit", "protein", "dairy", "cereal", "seeds", "oil_and_fats", "sweet")
+val ingredientCategories = listOf("vegetables", "fruit", "protein", "dairy", "cereal", "seeds", "oil_and_fats", "sweet", "custom")
 
 /** Keep the complete ingredient while changing only the field under test. */
 fun MutableMap<String, Any?>.editIngredient(change: (MutableMap<String, Any?>) -> Unit) {

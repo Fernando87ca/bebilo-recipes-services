@@ -34,7 +34,7 @@ class RecipeCreationIntegrationTest {
                 val result = if (status == RecipeStatus.Ready) complete(created).copy(status = status)
                     else created.copy(status = status)
                 repository.save(uid, job.documentId, result, images)
-                assertEquals(result, repository.get(uid, created.summary.id))
+                assertEquals(result.copy(safetyVerification = null), repository.get(uid, created.summary.id))
                 assertEquals(context, reference.get().get().get("generationContext"))
             }
             assertEquals(images, reference.get().get().get("generationImages"))

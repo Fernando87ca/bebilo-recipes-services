@@ -1,0 +1,107 @@
+{
+  "type": "object",
+  "properties": {
+    "ingredients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "allergens": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "vegetables",
+              "fruit",
+              "protein",
+              "dairy",
+              "cereal",
+              "seeds",
+              "oil_and_fats",
+              "sweet"
+            ]
+          },
+          "catalogId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quantity": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preparation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "allergens",
+          "category",
+          "catalogId",
+          "quantity",
+          "unit",
+          "preparation"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "role"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "ingredients",
+    "roles"
+  ],
+  "additionalProperties": false
+}

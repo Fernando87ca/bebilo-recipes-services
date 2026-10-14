@@ -6,6 +6,18 @@ import java.time.Instant
 
 /** Firestore maps remain storage types until converted; missing required fields never get defaults. */
 fun Map<String, Any?>.toRecipe(): Recipe = Recipe(
+    ingredientChanges = if (containsKey("ingredientChanges")) array("ingredientChanges").map {
+        val value = it.objectMap()
+        if (!value.containsKey("replacementIngredient")) invalid()
+        RecipeIngredientChange(
+            when (value.string("action")) {
+                "replacement" -> IngredientChangeAction.Replacement
+                "omission" -> IngredientChangeAction.Omission
+                else -> invalid()
+            }, value.optionalInt("originalIngredientIndex") ?: invalid(),
+            value.objectValue("originalIngredient").ingredient(),
+            value["replacementIngredient"]?.objectMap()?.ingredient(), value.string("reason"))
+    } else emptyList(),
     summary = objectValue("summary").summary(),
     ingredients = array("ingredients").map { it.objectMap().ingredient() },
     cookingMethods = array("cookingMethods").map { it.stringValue() },
@@ -48,6 +60,7 @@ private fun Map<String, Any?>.ingredient() = RecipeIngredient(
         "seeds" -> RecipeIngredientCategory.Seeds
         "oil_and_fats" -> RecipeIngredientCategory.OilAndFats
         "sweet" -> RecipeIngredientCategory.Sweet
+        "custom" -> RecipeIngredientCategory.Custom
         else -> invalid()
     },
     catalogId = optionalString("catalogId"),

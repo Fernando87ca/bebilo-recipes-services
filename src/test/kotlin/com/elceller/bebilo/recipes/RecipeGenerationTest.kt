@@ -58,7 +58,11 @@ fun complete(initial: Recipe): Recipe = initial.copy(summary = initial.summary.c
     instructions = when (initial.instructions) {
         is RecipeInstructions.Steps -> RecipeInstructions.Steps(listOf(RecipeStep("s1", "Cocer al vapor"), RecipeStep("s2", "Triturar")))
         is RecipeInstructions.Narrative -> RecipeInstructions.Narrative(listOf(RecipeParagraph("p1", "Cocer al vapor. Triturar.")))
-    }, servings = initial.servings ?: 1)
+    }, servings = initial.servings ?: 1).verifiedFor()
+
+fun Recipe.verifiedFor(babies: List<GenerationBaby> = listOf(GenerationBaby("baby-1", "Nil", 8, "Puré", "suave", listOf("sin leche")))) =
+    copy(safetyVerification = RecipeSafetyVerification(copy(safetyVerification = null), babies.map { it.copy(name = "") }, true))
+fun Recipe.verifiedFor(context: GenerationContext) = verifiedFor(context.babies)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RecipeGenerationTest {
@@ -220,7 +224,7 @@ class RecipeGenerationTest {
             assertThrows(Exception::class.java) { validateComposition(job, invalid) }
         }
         val extra = RecipeIngredient("Aceite", emptyList(), RecipeIngredientCategory.OilAndFats)
-        validateComposition(job, value.copy(ingredients = value.ingredients + extra))
+        validateComposition(job, value.copy(ingredients = value.ingredients + extra).verifiedFor(job.context))
         assertThrows(IllegalArgumentException::class.java) { validateImagePlan(value.copy(imageMode = RecipeImageMode.Contextual),
             listOf(PlannedImage(null, "Cover", "Cover"), PlannedImage("missing", "Other", "Other"))) }
     }

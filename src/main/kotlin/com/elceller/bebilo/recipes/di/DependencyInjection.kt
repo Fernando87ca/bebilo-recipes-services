@@ -41,7 +41,7 @@ fun Application.configureDependencyInjection(overrides: DependencyRegistry.() ->
         provideDefault<RecipeGenerator> {
             val config = resolve<AppConfig>(); val secret = resolve<OpenAISecret>()
             KoogRecipeGenerator(OpenAILLMClient(httpClient = ResponsesTransport(llmHttpClient(), config.openaiBaseUrl,
-                secret::read) { input, cached -> app.log.info("LLM tokens: input={} cached={}", input, cached) }), resolve())
+                secret::read) { input, cached -> app.log.info("LLM tokens: input={} cached={}", input, cached) }), resolve(), report = { app.log.info("Recipe phase: {}", it) })
         }
         provideDefault<RecipeImageGenerator> {
             val config = resolve<AppConfig>(); val secret = resolve<OpenAISecret>()

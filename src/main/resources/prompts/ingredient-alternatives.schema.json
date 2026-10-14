@@ -1,0 +1,119 @@
+{
+  "type": "object",
+  "properties": {
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "replacement",
+              "omission"
+            ]
+          },
+          "replacementIngredient": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "allergens": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "vegetables",
+                  "fruit",
+                  "protein",
+                  "dairy",
+                  "cereal",
+                  "seeds",
+                  "oil_and_fats",
+                  "sweet"
+                ]
+              },
+              "catalogId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "quantity": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "unit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "preparation": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "allergens",
+              "category",
+              "catalogId",
+              "quantity",
+              "unit",
+              "preparation"
+            ],
+            "additionalProperties": false
+          },
+          "reason": {
+            "type": "string"
+          },
+          "omissionPreservesRecipe": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "index",
+          "action",
+          "replacementIngredient",
+          "reason",
+          "omissionPreservesRecipe"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "changes"
+  ],
+  "additionalProperties": false
+}

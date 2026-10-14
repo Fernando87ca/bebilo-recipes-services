@@ -25,6 +25,17 @@ fun Recipe.validateStoredContent() {
         valid(ingredient.quantity == null || (ingredient.quantity.isFinite() && ingredient.quantity > 0))
         listOf(ingredient.catalogId, ingredient.unit, ingredient.preparation).forEach(::optionalText)
     }
+    unique(ingredientChanges.map { it.originalIngredientIndex.toString() })
+    ingredientChanges.forEach { change ->
+        valid(change.originalIngredientIndex >= 0 && change.reason.isNotBlank())
+        val original = change.originalIngredient
+        valid(original.name.isNotBlank())
+        validateAllergens(original.allergens)
+        valid(original.quantity == null || (original.quantity.isFinite() && original.quantity > 0))
+        listOf(original.catalogId, original.unit, original.preparation).forEach(::optionalText)
+        valid((change.action == IngredientChangeAction.Omission) == (change.replacementIngredient == null))
+        change.replacementIngredient?.let { valid(it.catalogId == null && it in ingredients) }
+    }
     when (val value = instructions) {
         is RecipeInstructions.Steps -> {
             valid(status != RecipeStatus.Ready || value.steps.isNotEmpty())

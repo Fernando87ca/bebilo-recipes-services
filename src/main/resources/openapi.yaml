@@ -232,6 +232,9 @@ paths:
               - name: Patata
                 category: vegetables
                 allergens: []
+              - name: Yogur natural
+                category: custom
+                allergens: []
               cookingMethods:
               - steam
       responses:
@@ -368,6 +371,7 @@ components:
             $ref: '#/components/schemas/RecipeBabyDto'
           minItems: 1
         allergens:
+          description: Unión de alérgenos de ingredientes persistidos. En nuevas recetas Ready incluye el análisis completo incluso sin restricciones; otros estados pueden conservar declaraciones iniciales. El histórico no se recalcula.
           type: array
           items:
             $ref: '#/components/schemas/RecipeAllergenDto'
@@ -404,12 +408,13 @@ components:
           minLength: 1
           pattern: \S
         allergens:
+          description: Lista explícita. La solicitud y los snapshots originales contienen declaraciones recibidas; los ingredientes finales de nuevas recetas Ready completan el análisis de posibles alérgenos. Vacía si no se identifican alérgenos.
           type: array
           items:
             $ref: '#/components/schemas/RecipeAllergenDto'
         category:
           type: string
-          description: Categoría explícita obligatoria en todos los estados, incluidos Created/Loading/Error.
+          description: Categoría explícita obligatoria. custom se reclasifica al generar. Todos los ingredientes se analizan para completar alérgenos; los incompatibles pueden sustituirse u omitirse. Los GET conservan los datos persistidos.
           enum:
           - vegetables
           - fruit
@@ -419,6 +424,7 @@ components:
           - seeds
           - oil_and_fats
           - sweet
+          - custom
         catalogId:
           type: string
           nullable: true
@@ -550,6 +556,7 @@ components:
         instructions:
           $ref: '#/components/schemas/RecipeInstructionsDto'
         imageMode:
+          description: Las recetas nuevas generan como máximo una portada y cuatro imágenes de instrucciones (cinco en total). Las imágenes son opcionales.
           type: string
           enum:
           - none
@@ -577,6 +584,11 @@ components:
           nullable: true
           minLength: 1
           pattern: \S
+        ingredientChanges:
+          type: array
+          description: Sustituciones y omisiones de ingredientes de la solicitud, en índice base cero. Vacía para documentos históricos sin este campo.
+          items:
+            $ref: '#/components/schemas/RecipeIngredientChangeDto'
         adaptationNotes:
           type: string
           nullable: true
@@ -601,6 +613,7 @@ components:
       - cookingMethods
       - instructions
       - imageMode
+      - ingredientChanges
       allOf:
       - oneOf:
         - type: object
@@ -621,6 +634,29 @@ components:
               - Created
               - Loading
               - Error
+    RecipeIngredientChangeDto:
+      type: object
+      required: [action, originalIngredientIndex, originalIngredient, replacementIngredient, reason]
+      properties:
+        action:
+          type: string
+          enum: [replacement, omission]
+        originalIngredientIndex:
+          type: integer
+          minimum: 0
+          description: Índice base cero en ingredients de la solicitud original.
+        originalIngredient:
+          $ref: '#/components/schemas/RecipeIngredientDto'
+        replacementIngredient:
+          type: object
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/RecipeIngredientDto'
+          description: Ingrediente final con catalogId nulo; nulo para omission.
+        reason:
+          type: string
+          minLength: 1
+          pattern: \S
     RecipesResponseDto:
       type: object
       properties:

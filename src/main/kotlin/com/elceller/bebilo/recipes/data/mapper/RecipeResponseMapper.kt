@@ -10,6 +10,10 @@ fun Recipe.toResponse() = RecipeDto(
     preparationMinutes = preparationMinutes, cookingMinutes = cookingMinutes, servings = servings,
     storageNotes = storageNotes, adaptationNotes = adaptationNotes, createdAt = createdAt, updatedAt = updatedAt,
     status = RecipeStatusDto.valueOf(status.name),
+    ingredientChanges = ingredientChanges.map {
+        RecipeIngredientChangeDto(IngredientChangeActionDto.valueOf(it.action.name), it.originalIngredientIndex,
+            it.originalIngredient.toResponse(), it.replacementIngredient?.toResponse(), it.reason)
+    },
 )
 private fun RecipeSummary.toResponse() = RecipeSummaryDto(
     id, title, babies.map { RecipeBabyDto(it.id, it.name) }, allergens.map { it.toResponse() },
@@ -17,7 +21,7 @@ private fun RecipeSummary.toResponse() = RecipeSummaryDto(
 )
 private fun RecipeAllergen.toResponse() = RecipeAllergenDto(code, name)
 private fun RecipeImage.toResponse() = RecipeImageDto(url, altText)
-private fun RecipeIngredient.toResponse() = RecipeIngredientDto(
+fun RecipeIngredient.toResponse() = RecipeIngredientDto(
     name, allergens.map { it.toResponse() }, category.toResponse(), catalogId, quantity, unit, preparation,
 )
 private fun RecipeIngredientCategory.toResponse(): RecipeIngredientCategoryDto = when (this) {
@@ -29,6 +33,7 @@ private fun RecipeIngredientCategory.toResponse(): RecipeIngredientCategoryDto =
     RecipeIngredientCategory.Seeds -> RecipeIngredientCategoryDto.Seeds
     RecipeIngredientCategory.OilAndFats -> RecipeIngredientCategoryDto.OilAndFats
     RecipeIngredientCategory.Sweet -> RecipeIngredientCategoryDto.Sweet
+    RecipeIngredientCategory.Custom -> RecipeIngredientCategoryDto.Custom
 }
 private fun RecipeInstructions.toResponse(): RecipeInstructionsDto = when (this) {
     is RecipeInstructions.Steps -> RecipeInstructionsDto.Steps(steps.map {

@@ -24,7 +24,7 @@ EMULATOR = "http://127.0.0.1:18082"
 SERVICE = "http://127.0.0.1:18084"
 GATEWAY = "http://127.0.0.1:18088"
 DOCUMENTS = f"{EMULATOR}/v1/projects/{PROJECT}/databases/(default)/documents"
-CATEGORIES = ["vegetables", "fruit", "protein", "dairy", "cereal", "seeds", "oil_and_fats", "sweet"]
+CATEGORIES = ["vegetables", "fruit", "protein", "dairy", "cereal", "seeds", "oil_and_fats", "sweet", "custom"]
 
 
 def request(url, token=None, method="GET", data=None, gateway=False):
@@ -126,7 +126,7 @@ class AuthStub(BaseHTTPRequestHandler):
         if parsed.path == "/v1/ai-configuration":
             return self.json_response({"instructionStyle": "narrative" if token == "b" else "steps", "photoMode": "multiple" if token == "b" else "single" if token == "empty" else "none", "modelId": "gpt-6-luna"})
         if parsed.path == "/v1/get-babies":
-            return self.json_response([{"id": "baby-" + token, "name": "Fixture", "ageMonths": 8, "feedingStage": "Puré", "preferredTexture": "suave", "restrictions": ["sin leche"], "foodInterest": "", "description": ""}])
+            return self.json_response([{"id": "baby-" + token, "name": "Fixture", "ageMonths": 8, "feedingStage": "Puré", "preferredTexture": "suave", "restrictions": [] if token == "b" else ["sin leche"], "foodInterest": "", "description": ""}])
         self.json_response({}, 404)
     def read_body(self):
         if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
@@ -194,16 +194,36 @@ class AuthStub(BaseHTTPRequestHandler):
             self.calls.append({"agent": agent, "model": body["model"]})
             time.sleep(0.15)  # Keep the actual LLM boundary asynchronous relative to the POST.
             user = json.loads(body["input"][-1]["content"][0]["text"])
-            if agent == "composition":
+            if agent == "ingredient-candidates":
                 ingredients = user["request"]["ingredients"]
                 if any(item["name"] == "FAIL" for item in ingredients):
                     return self.json_response({"error": {"message": "simulated"}}, 500)
                 for item in ingredients:
+                    if item["category"] == "custom": item["category"] = "dairy"
                     if item.get("quantity") is None: item["quantity"] = 100.0
                     if item.get("unit") is None: item["unit"] = "g"
+                output = {"ingredients": ingredients, "roles": [{"index": i, "role": "Base del plato"} for i in range(len(ingredients))]}
+            elif agent == "allergen-analysis":
+                records = []
+                for index, item in enumerate(user["ingredients"]):
+                    allergens = [{"code": "milk", "name": "Leche"}] if "yogur" in item["name"].lower() else []
+                    conflicts = [{"babyIndex": bi, "restrictionIndex": ri, "reason": "Contiene leche"}
+                        for bi, baby in enumerate(user["babies"]) for ri, restriction in enumerate(baby["restrictions"])
+                        if allergens and restriction == "sin leche"]
+                    records.append({"index": index, "name": item["name"], "allergens": allergens, "identifiable": True,
+                        "compatible": not conflicts, "canOmit": False, "conflicts": conflicts})
+                output = {"complete": True, "recipeCompatible": True, "requestedTitleCompatible": True,
+                    "omissionsAcceptable": True, "ingredients": records}
+            elif agent == "ingredient-alternatives":
+                output = {"changes": [{"index": record["index"], "action": "replacement", "replacementIngredient": {
+                    "name": "Calabacín", "category": "vegetables", "allergens": [], "catalogId": None,
+                    "quantity": 100.0, "unit": "g", "preparation": "Pelado"}, "reason": "Sustituir leche por ingrediente compatible",
+                    "omissionPreservesRecipe": False} for record in user["analysis"]["ingredients"] if not record["compatible"]]}
+            elif agent == "composition":
+                ingredients = user["approvedIngredients"]
                 style = user["settings"]["instructionStyle"]
                 instructions = {"type": "steps", "steps": [{"id": "s1", "text": "Cocer al vapor"}, {"id": "s2", "text": "Dejar reposar"}]} if style == "steps" else {"type": "narrative", "paragraphs": [{"id": "p1", "text": "Cocer al vapor y triturar."}, {"id": "p2", "text": "Servir."}]}
-                output = {"title": user["request"].get("title") or "Patata al vapor", "ingredients": ingredients, "cookingMethods": user["request"]["cookingMethods"], "instructions": instructions, "description": "Receta de prueba", "preparationMinutes": 5, "cookingMinutes": 10, "servings": user["request"].get("servings") or 1, "storageNotes": None, "adaptationNotes": None, "recommendedAgeMonths": 8, "totalMinutes": 15, "texture": "Puré", "tags": []}
+                output = {"title": user["request"].get("title") or "Patata al vapor", "ingredients": ingredients, "cookingMethods": user["request"]["cookingMethods"], "instructions": instructions, "description": "Receta de prueba", "preparationMinutes": 5, "cookingMinutes": 10, "servings": user["request"].get("servings") or 1, "storageNotes": None, "adaptationNotes": "Se sustituye el ingrediente incompatible" if user["ingredientChanges"] else None, "recommendedAgeMonths": 8, "totalMinutes": 15, "texture": "Puré", "tags": []}
             else:
                 recipe = user["recipe"]
                 targets = recipe["instructions"].get("steps", recipe["instructions"].get("paragraphs"))
@@ -339,7 +359,7 @@ def main():
                 encoded = urllib.parse.quote(value["summary"]["id"], safe="")
                 status, body = request(f"{GATEWAY}/recipes/v1/recipe/{encoded}", "a", gateway=True)
                 assert status == 200, (encoded, status, body)
-                assert json.loads(body) == value
+                assert json.loads(body) == dict(value, ingredientChanges=value.get("ingredientChanges", []))
                 expected = fixture(value["summary"]["id"], ids.index(value["summary"]["id"]))
                 assert value["ingredients"][0]["category"] == expected["ingredients"][0]["category"]
                 assert value["createdAt"] == "2026-10-12T08:00:00.123456Z"
@@ -430,8 +450,8 @@ def main():
             checks += 1
             assert request(f"{DOCUMENTS}/users/smoke-a/recipes/corrupt", method="DELETE")[0] == 200
             # POST and asynchronous generation with real Koog, Firebase SDKs and HTTP doubles.
-            def create(token, ingredient="Patata"):
-                body = {"babyIds": ["baby-" + token], "ingredients": [{"name": ingredient, "category": "vegetables", "allergens": []}], "cookingMethods": ["steam"]}
+            def create(token, ingredient="Patata", category="vegetables"):
+                body = {"babyIds": ["baby-" + token], "ingredients": [{"name": ingredient, "category": category, "allergens": []}], "cookingMethods": ["steam"]}
                 status, result = request(f"{GATEWAY}/recipes/v1/recipe", token, "POST", body, gateway=True)
                 assert status == 200, (status, result)
                 value = json.loads(result)
@@ -450,11 +470,26 @@ def main():
                 raise AssertionError("Generation did not finish")
 
             for token, style in [("a", "steps"), ("b", "narrative")]:
-                created = create(token); checks += 1
+                created = create(token, "Yogur natural", "custom"); checks += 1
+                assert created["ingredients"][0]["category"] == "custom"
+                assert created["ingredients"][0]["allergens"] == []
+                checks += 2
                 generated, seen = finished(token, created["summary"]["id"])
                 assert generated["status"] == "Ready" and generated["instructions"]["type"] == style
                 assert "Loading" in seen
-                assert generated["ingredients"][0]["name"] == "Patata"
+                if token == "a":
+                    assert generated["ingredients"][0]["name"] == "Calabacín"
+                    assert generated["summary"]["allergens"] == []
+                    change = generated["ingredientChanges"][0]
+                    assert change["action"] == "replacement" and change["originalIngredientIndex"] == 0
+                    assert change["originalIngredient"] == created["ingredients"][0]
+                    assert change["replacementIngredient"] == generated["ingredients"][0]
+                else:
+                    assert generated["ingredients"][0]["name"] == "Yogur natural"
+                    assert generated["ingredients"][0]["category"] == "dairy"
+                    assert generated["summary"]["allergens"] == [{"code": "milk", "name": "Leche"}]
+                    assert generated["ingredientChanges"] == []
+                checks += 2
                 checks += 2
                 assert request(f"{GATEWAY}/recipes/v1/recipe/{created['summary']['id']}", "b" if token == "a" else "a", gateway=True)[0] == 404
                 checks += 1
@@ -478,15 +513,20 @@ def main():
                     assert request(old_path, "b", gateway=True)[0] == 404
                     assert request(old_path, gateway=True)[0] == 404
                     checks += 2
-            failed = create("a", "FAIL")
-            assert finished("a", failed["summary"]["id"])[0]["status"] == "Error"
+            failed = create("a", "FAIL", "custom")
+            failed_result = finished("a", failed["summary"]["id"])[0]
+            assert failed_result["status"] == "Error"
+            assert failed_result["ingredients"] == failed["ingredients"]
             checks += 2
             photo_failed = create("empty", "PHOTOFAIL")
             value, _ = finished("empty", photo_failed["summary"]["id"])
             assert value["status"] == "Ready" and value["summary"].get("coverImage") is None
             checks += 2
             stats = json.loads(subprocess.check_output(["docker", "exec", names[2], "python", "-c", "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/stats').read().decode())"]))
-            assert sum(c["agent"] == "composition" for c in stats) == 4
+            assert sum(c["agent"] == "ingredient-candidates" for c in stats) == 4
+            assert sum(c["agent"] == "allergen-analysis" for c in stats) == 7
+            assert sum(c["agent"] == "ingredient-alternatives" for c in stats) == 1
+            assert sum(c["agent"] == "composition" for c in stats) == 3
             assert sum(c["agent"] == "visual-planning" for c in stats) == 2
             assert sum(c["agent"] == "image" for c in stats) == 3
             checks += 3

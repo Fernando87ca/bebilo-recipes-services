@@ -36,6 +36,7 @@ enum class RecipeIngredientCategoryDto {
     @SerialName("seeds") Seeds,
     @SerialName("oil_and_fats") OilAndFats,
     @SerialName("sweet") Sweet,
+    @SerialName("custom") Custom,
 }
 
 @Serializable
@@ -106,4 +107,22 @@ data class RecipeDto(
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val status: RecipeStatusDto,
+    @OptIn(ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault
+    val ingredientChanges: List<RecipeIngredientChangeDto> = emptyList(),
+)
+
+@Serializable
+enum class IngredientChangeActionDto {
+    @SerialName("replacement") Replacement,
+    @SerialName("omission") Omission,
+}
+
+@Serializable
+data class RecipeIngredientChangeDto(
+    val action: IngredientChangeActionDto,
+    val originalIngredientIndex: Int,
+    val originalIngredient: RecipeIngredientDto,
+    val replacementIngredient: RecipeIngredientDto?,
+    val reason: String,
 )

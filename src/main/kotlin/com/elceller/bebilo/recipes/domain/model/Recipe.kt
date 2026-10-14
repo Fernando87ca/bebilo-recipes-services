@@ -27,6 +27,7 @@ enum class RecipeIngredientCategory {
     Seeds,
     OilAndFats,
     Sweet,
+    Custom,
 }
 
 data class RecipeIngredient(
@@ -84,4 +85,23 @@ data class Recipe(
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val status: RecipeStatus,
+    val ingredientChanges: List<RecipeIngredientChange> = emptyList(),
+    // Ephemeral proof from the generation pipeline; never serialized into HTTP or Firestore.
+    val safetyVerification: RecipeSafetyVerification? = null,
+)
+
+enum class IngredientChangeAction { Replacement, Omission }
+
+data class RecipeIngredientChange(
+    val action: IngredientChangeAction,
+    val originalIngredientIndex: Int,
+    val originalIngredient: RecipeIngredient,
+    val replacementIngredient: RecipeIngredient?,
+    val reason: String,
+)
+
+data class RecipeSafetyVerification(
+    val recipe: Recipe,
+    val babies: List<GenerationBaby>,
+    val requestedTitleCompatible: Boolean,
 )

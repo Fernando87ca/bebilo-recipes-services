@@ -39,8 +39,8 @@ class KoogRecipeGeneratorTest {
                     assertEquals("Bearer test-secret", request.headers[HttpHeaders.Authorization])
                     val payload = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
                     requests.add(payload)
-                    val output = if (payload.getValue("text").jsonObject.getValue("format").jsonObject.getValue("name").jsonPrimitive.content == "composition")
-                        result.toString() else """{"images":[{"instructionId":null,"prompt":"Plato terminado","altText":"Patata"},{"instructionId":"${if (style == "steps") "s1" else "p1"}","prompt":"Proceso terminado","altText":"Proceso"}]}"""
+                    val agentName = payload.getValue("text").jsonObject.getValue("format").jsonObject.getValue("name").jsonPrimitive.content
+                    val output = if (agentName != "visual-planning") safetyMockOutput(payload, result) else """{"images":[{"instructionId":null,"prompt":"Plato terminado","altText":"Patata"},{"instructionId":"${if (style == "steps") "s1" else "p1"}","prompt":"Proceso terminado","altText":"Proceso"}]}"""
                     respond(responsesJson(output, model), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
                 }
                 val http = HttpClient(engine) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
@@ -51,7 +51,11 @@ class KoogRecipeGeneratorTest {
                     validateComposition(job.copy(context = context), recipe)
                     val plan = agent.planImages(context, recipe); validateImagePlan(recipe, plan)
                     agent.compose(context.copy(babies = context.babies.map { it.copy(name = "Otro nombre") }), job.initial)
-                    assertEquals(3, requests.size)
+                    val visualFormat = requests[4].getValue("text").jsonObject.getValue("format").jsonObject
+                    val imagesSchema = visualFormat.getValue("schema").jsonObject.getValue("properties").jsonObject.getValue("images").jsonObject
+                    assertEquals(5, imagesSchema.getValue("maxItems").jsonPrimitive.int)
+                    assertTrue(requests[4].getValue("input").toString().contains("hasta 4 imágenes de instrucciones"))
+                    assertEquals(9, requests.size)
                     requests.forEach { payload ->
                         assertEquals(model, payload.getValue("model").jsonPrimitive.content)
                         assertEquals(false, payload.getValue("store").jsonPrimitive.boolean)
@@ -62,11 +66,11 @@ class KoogRecipeGeneratorTest {
                             .jsonObject.getValue("mode").jsonPrimitive.content)
                         assertEquals(true, payload.getValue("text").jsonObject.getValue("format").jsonObject.getValue("strict").jsonPrimitive.boolean)
                     }
-                    assertEquals(requests.first().getValue("input").jsonArray.first(), requests.last().getValue("input").jsonArray.first())
-                    assertEquals(requests.first()["prompt_cache_key"], requests.last()["prompt_cache_key"])
-                    assertNotEquals(requests.first()["prompt_cache_key"], requests[1]["prompt_cache_key"])
-                    assertFalse(requests[1].getValue("input").toString().contains("Nil"))
-                    assertEquals(List(3) { 1200L to 1024L }, metrics)
+                    assertEquals(requests.first().getValue("input").jsonArray.first(), requests[5].getValue("input").jsonArray.first())
+                    assertEquals(requests.first()["prompt_cache_key"], requests[5]["prompt_cache_key"])
+                    assertNotEquals(requests.first()["prompt_cache_key"], requests[4]["prompt_cache_key"])
+                    assertFalse(requests[4].getValue("input").toString().contains("Nil"))
+                    assertEquals(List(9) { 1200L to 1024L }, metrics)
                 } finally { agent.close() }
             } } }
         }

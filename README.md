@@ -26,10 +26,15 @@ el HTTP. Cada POST crea una receta nueva; no hay recuperación ni idempotencia.
 
 Body de creación: `babyIds`, `ingredients` y `cookingMethods` no vacíos; `title`, `servings` y
 `additionalInstructions` opcionales. Ingredientes con categoría y alérgenos explícitos. El contexto
-se captura una vez: edad, etapa, textura, restricciones y configuración. Los agentes conservan
-los ingredientes iniciales y pueden completarlos y añadir compatibles, sin nuevos métodos.
+se captura una vez: edad, etapa, textura, restricciones y configuración. El principal propone ingredientes,
+las herramientas analyze_allergens y find_ingredient_alternatives analizan y resuelven incompatibilidades,
+y el principal redacta con ingredientes aprobados. El análisis final completo precede a persistencia e imágenes.
+Todos los ingredientes completan alérgenos sin borrar los declarados cuando se mantienen. custom se
+reclasifica; los incompatibles se sustituyen u omiten con viabilidad confirmada por ambos agentes.
+Los cambios de ingredientes iniciales quedan en ingredientChanges y adaptationNotes. Sin identificación,
+alternativa válida o verificación final, termina Error conservando la solicitud inicial.
 
-Koog 1.3.0 usa el modelId exacto seleccionado para composición y planificación visual. Los
+Koog 1.3.0 usa el modelId seleccionado en todos los agentes. Los
 prompts españoles y JSON Schemas están en `src/main/resources/prompts/`; se cargan al iniciar
 sin contactar al proveedor y requieren recompilar. Responses usa esquema estricto, prefijo fijo,
 clave derivada del prompt/schema y breakpoint explícito; se registran tokens totales/cacheados,
@@ -78,7 +83,7 @@ Colección: `users/{uid}/recipes/{documentId}`. Cada documento contiene los camp
 como mapas/arrays nativos, incluidos `status`, `summary`, `ingredients`, `cookingMethods`,
 `instructions` e `imageMode`. Cada ingrediente requiere `category` persistido, string exacto
 entre `vegetables`, `fruit`, `protein`, `dairy`, `cereal`, `seeds`, `oil_and_fats`, `sweet`,
-sin null ni valor predeterminado. Aplica también a ingredientes libres y estados Loading/Error.
+`custom`, sin null ni valor predeterminado. custom identifica un ingrediente manual. Aplica también a ingredientes libres y estados Loading/Error.
 `catalogId` sigue siendo string opcional (IDs numéricos como texto u opacos), sin renumeración
 ni inferencia de categorías desde el ID o el nombre. El productor Koog debe clasificar y
 persistir categorías; los GET solo las leen. Categoría ausente, null, desconocida o de otro
@@ -192,3 +197,5 @@ durante desconexiones. Reconectar vuelve a sincronizar el estado actual. Se vali
 snapshot antes del stream (timeout 10 s → 503); errores anteriores conservan JSON existente.
 Documentos inválidos/IDs duplicados fallan sin resultados parciales. Errores después de abrir o
 cola de 64 lotes llena cierran stream sin JSON; desconexión libera listener. Sin migraciones.
+
+La generación analiza todos los ingredientes mediante `analyze_allergens`, resuelve incompatibilidades con `find_ingredient_alternatives` y verifica la receta final antes de Ready e imágenes. `ingredientChanges` registra sustituciones/omisiones de la solicitud; sus alérgenos finales se entregan incluso sin restricciones. [Especificación](../docs/changes/recipe-allergen-agents/spec.md).

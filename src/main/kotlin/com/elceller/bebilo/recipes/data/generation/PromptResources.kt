@@ -4,6 +4,12 @@ import kotlinx.serialization.json.*
 import java.security.MessageDigest
 
 class PromptResources {
+    val ingredientCandidates = resource("ingredient-candidates.txt")
+    val allergenAnalysis = resource("allergen-analysis.txt")
+    val ingredientAlternatives = resource("ingredient-alternatives.txt")
+    val candidateSchema = Json.parseToJsonElement(resource("ingredient-candidates.schema.json")).jsonObject
+    val analysisSchema = Json.parseToJsonElement(resource("allergen-analysis.schema.json")).jsonObject
+    val alternativesSchema = Json.parseToJsonElement(resource("ingredient-alternatives.schema.json")).jsonObject
     val composition = resource("composition.txt")
     val visualPlanning = resource("visual-planning.txt")
     val rendering = resource("image-rendering.txt")

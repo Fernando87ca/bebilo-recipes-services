@@ -1,0 +1,103 @@
+{
+  "type": "object",
+  "properties": {
+    "complete": {
+      "type": "boolean"
+    },
+    "recipeCompatible": {
+      "type": "boolean"
+    },
+    "requestedTitleCompatible": {
+      "type": "boolean"
+    },
+    "omissionsAcceptable": {
+      "type": "boolean"
+    },
+    "ingredients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "allergens": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "identifiable": {
+            "type": "boolean"
+          },
+          "compatible": {
+            "type": "boolean"
+          },
+          "canOmit": {
+            "type": "boolean"
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "babyIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "restrictionIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "babyIndex",
+                "restrictionIndex",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "index",
+          "name",
+          "allergens",
+          "identifiable",
+          "compatible",
+          "canOmit",
+          "conflicts"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "complete",
+    "recipeCompatible",
+    "requestedTitleCompatible",
+    "omissionsAcceptable",
+    "ingredients"
+  ],
+  "additionalProperties": false
+}

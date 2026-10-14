@@ -17,14 +17,23 @@ posteriores cierran stream. Cola 64 lotes sin descarte silencioso; retirar liste
 
 Los GET no crean, escriben, reparan ni generan contenido y no consultan AIconfig, Babies o Profile.
 Conservar todos los campos persistidos y exigir `status` y `ingredients[].category` explícitos.
-Category admite solo los ocho valores de OpenAPI, sin default, inferencia ni reparación. Documentos inválidos y IDs
+Category admite los nueve valores de OpenAPI, incluido custom, sin default, inferencia ni reparación. Documentos inválidos y IDs
 duplicados son errores internos; no producir bibliotecas parciales o vacías para ocultarlos.
 Actualizar OpenAPI y pruebas con cualquier cambio de contrato.
 
 POST `/v1/recipe` consulta AI Configuration y Babies con el Bearer y persiste Created antes de
 responder 200. El worker de aplicación usa un contexto fijo sin tokens, escribe Loading antes
 de Koog y Ready/Error al terminar. Created/Loading/Error admiten instrucciones vacías; Ready
-requiere contenido textual completo. Conservar ingredientes iniciales, categorías y métodos.
+requiere contenido textual completo y verificación final efímera vinculada a la receta y contexto.
+La estrategia principal registra analyze_allergens y find_ingredient_alternatives como herramientas
+nativas de agentes Koog. Analizar siempre todos los ingredientes, incluso sin restricciones. Completar
+alérgenos sin borrar declaraciones de ingredientes mantenidos; reclasificar custom. Los incompatibles
+pueden sustituirse con catalogId=null u omitirse solo si ambas herramientas avalan la viabilidad.
+Una sola tanda de alternativas; analizar sustitutos y receta final antes de persistir contenido e imágenes.
+Registrar cambios de ingredientes iniciales en ingredientChanges con snapshot original e índice base cero,
+y explicarlos en adaptationNotes. Conservar datos indicados de ingredientes mantenidos, métodos y raciones.
+Adaptar título solicitado solo si el cambio lo vuelve incorrecto. Fallos o dudas terminan Error conservando
+solicitud inicial. GET admite histórico sin ingredientChanges como lista vacía, sin reparaciones ni análisis.
 Los prompts españoles y schemas están en `src/main/resources/prompts/`; recompilar para cambiarlos.
 No introducir reintentos, reparación LLM ni recuperación tras reinicio.
 
