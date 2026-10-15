@@ -104,26 +104,31 @@
               "id": {
                 "type": "string"
               },
-              "text": {
-                "type": "string"
-              },
-              "title": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "durationMinutes": {
                 "type": [
                   "integer",
                   "null"
                 ]
+              },
+              "objective": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "tasks": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                }
               }
             },
             "required": [
               "id",
-              "text",
-              "title",
+              "objective",
+              "tasks",
               "durationMinutes"
             ],
             "additionalProperties": false

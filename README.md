@@ -199,3 +199,9 @@ Documentos inválidos/IDs duplicados fallan sin resultados parciales. Errores de
 cola de 64 lotes llena cierran stream sin JSON; desconexión libera listener. Sin migraciones.
 
 La generación analiza todos los ingredientes mediante `analyze_allergens`, resuelve incompatibilidades con `find_ingredient_alternatives` y verifica la receta final antes de Ready e imágenes. `ingredientChanges` registra sustituciones/omisiones de la solicitud; sus alérgenos finales se entregan incluso sin restricciones. [Especificación](../docs/changes/recipe-allergen-agents/spec.md).
+
+## Nacimiento e IA por usuario
+
+Babies entrega `birthDate` obligatorio ISO. Cada POST calcula meses completos al aceptar usando una fecha Europe/Madrid y reloj inyectable. `generationContext` conserva `referenceDate`, nacimiento y edad derivada durante el worker; GET no recalcula históricos.
+
+[Plan transversal](../docs/changes/user-ai-and-baby-birth-date/plan.md).

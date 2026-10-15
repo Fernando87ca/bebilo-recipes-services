@@ -67,7 +67,7 @@ def firebase_value(value):
 
 
 def fixture(recipe_id, index=0):
-    instruction = {"type": "steps", "steps": [{"id": "s", "text": "Texto persistido", "image": {"url": "https://example.com/step.png"}}]}
+    instruction = {"type": "steps", "steps": [{"id": "s", "objective": "Preparación", "tasks": ["Texto persistido"], "image": {"url": "https://example.com/step.png"}}]}
     if index % 2:
         instruction = {"type": "narrative", "paragraphs": [{"id": "p", "text": "Uno.\nDos."}]}
     return {
@@ -126,7 +126,7 @@ class AuthStub(BaseHTTPRequestHandler):
         if parsed.path == "/v1/ai-configuration":
             return self.json_response({"instructionStyle": "narrative" if token == "b" else "steps", "photoMode": "multiple" if token == "b" else "single" if token == "empty" else "none", "modelId": "gpt-6-luna"})
         if parsed.path == "/v1/get-babies":
-            return self.json_response([{"id": "baby-" + token, "name": "Fixture", "ageMonths": 8, "feedingStage": "Puré", "preferredTexture": "suave", "restrictions": [] if token == "b" else ["sin leche"], "foodInterest": "", "description": ""}])
+            return self.json_response([{"id": "baby-" + token, "name": "Fixture", "birthDate": "2026-02-14", "feedingStage": "Puré", "preferredTexture": "suave", "restrictions": [] if token == "b" else ["sin leche"], "foodInterest": "", "description": ""}])
         self.json_response({}, 404)
     def read_body(self):
         if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
@@ -219,10 +219,10 @@ class AuthStub(BaseHTTPRequestHandler):
                     "name": "Calabacín", "category": "vegetables", "allergens": [], "catalogId": None,
                     "quantity": 100.0, "unit": "g", "preparation": "Pelado"}, "reason": "Sustituir leche por ingrediente compatible",
                     "omissionPreservesRecipe": False} for record in user["analysis"]["ingredients"] if not record["compatible"]]}
-            elif agent == "composition":
+            elif agent in ("composition-steps", "composition-narrative"):
                 ingredients = user["approvedIngredients"]
                 style = user["settings"]["instructionStyle"]
-                instructions = {"type": "steps", "steps": [{"id": "s1", "text": "Cocer al vapor"}, {"id": "s2", "text": "Dejar reposar"}]} if style == "steps" else {"type": "narrative", "paragraphs": [{"id": "p1", "text": "Cocer al vapor y triturar."}, {"id": "p2", "text": "Servir."}]}
+                instructions = {"type": "steps", "steps": [{"id": "s1", "objective": "Cocer", "tasks": ["Cocer al vapor"]}, {"id": "s2", "objective": "Reposar", "tasks": ["Dejar reposar"]}]} if style == "steps" else {"type": "narrative", "paragraphs": [{"id": "p1", "text": "Cocer al vapor y triturar."}, {"id": "p2", "text": "Servir."}]}
                 output = {"title": user["request"].get("title") or "Patata al vapor", "ingredients": ingredients, "cookingMethods": user["request"]["cookingMethods"], "instructions": instructions, "description": "Receta de prueba", "preparationMinutes": 5, "cookingMinutes": 10, "servings": user["request"].get("servings") or 1, "storageNotes": None, "adaptationNotes": "Se sustituye el ingrediente incompatible" if user["ingredientChanges"] else None, "recommendedAgeMonths": 8, "totalMinutes": 15, "texture": "Puré", "tags": []}
             else:
                 recipe = user["recipe"]
@@ -476,6 +476,13 @@ def main():
                 checks += 2
                 generated, seen = finished(token, created["summary"]["id"])
                 assert generated["status"] == "Ready" and generated["instructions"]["type"] == style
+                if style == "steps":
+                    blocks = generated["instructions"]["steps"]
+                    assert blocks[0]["objective"] == "Cocer" and blocks[0]["tasks"] == ["Cocer al vapor"]
+                    assert all("text" not in block and "title" not in block for block in blocks)
+                else:
+                    assert generated["instructions"]["paragraphs"][0]["text"] == "Cocer al vapor y triturar."
+
                 assert "Loading" in seen
                 if token == "a":
                     assert generated["ingredients"][0]["name"] == "Calabacín"
@@ -526,7 +533,7 @@ def main():
             assert sum(c["agent"] == "ingredient-candidates" for c in stats) == 4
             assert sum(c["agent"] == "allergen-analysis" for c in stats) == 7
             assert sum(c["agent"] == "ingredient-alternatives" for c in stats) == 1
-            assert sum(c["agent"] == "composition" for c in stats) == 3
+            assert sum(c["agent"] in ("composition-steps", "composition-narrative") for c in stats) == 3
             assert sum(c["agent"] == "visual-planning" for c in stats) == 2
             assert sum(c["agent"] == "image" for c in stats) == 3
             checks += 3

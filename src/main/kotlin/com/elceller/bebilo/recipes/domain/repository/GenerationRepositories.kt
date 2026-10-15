@@ -4,7 +4,7 @@ import com.elceller.bebilo.recipes.domain.model.*
 
 interface CreationContextRepository {
     suspend fun settings(token: String): AiSettings
-    suspend fun babies(token: String): List<GenerationBaby>
+    suspend fun babies(token: String): List<CreationBaby>
 }
 
 interface RecipeWriteRepository {

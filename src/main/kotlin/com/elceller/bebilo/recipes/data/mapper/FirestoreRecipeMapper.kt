@@ -82,7 +82,8 @@ private fun Map<String, Any?>.instructions(): RecipeInstructions = when (string(
         if (containsKey("paragraphs")) invalid()
         RecipeInstructions.Steps(array("steps").map { value ->
             value.objectMap().let { step ->
-                RecipeStep(step.string("id"), step.string("text"), step.optionalString("title"),
+                if (step.containsKey("text") || step.containsKey("title")) invalid()
+                RecipeStep(step.string("id"), step.string("objective"), step.array("tasks").map { it.stringValue() },
                     step.optionalInt("durationMinutes"), step.optionalImage("image"))
             }
         })

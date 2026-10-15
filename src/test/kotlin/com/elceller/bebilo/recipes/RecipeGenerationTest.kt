@@ -46,7 +46,7 @@ fun creationRequest() = CreateRecipeRequest(listOf("baby-1"),
     listOf(RecipeIngredientDto("Patata", emptyList(), RecipeIngredientCategoryDto.Vegetables)), listOf("steam"))
 fun creationContexts(style: String = "steps", mode: String = "none") = object : CreationContextRepository {
     override suspend fun settings(token: String) = AiSettings(style, mode, "gpt-6-luna")
-    override suspend fun babies(token: String) = listOf(GenerationBaby("baby-1", "Nil", 8, "Puré", "suave", listOf("sin leche")))
+    override suspend fun babies(token: String) = listOf(CreationBaby("baby-1", "Nil", java.time.LocalDate.now(java.time.ZoneId.of("Europe/Madrid")).minusMonths(8).toString(), "Puré", "suave", listOf("sin leche")))
 }
 fun creationAuth() = object : AuthUserRepository {
     override suspend fun getUserUid(bearerToken: String): String = when (bearerToken) {
@@ -56,11 +56,11 @@ fun creationAuth() = object : AuthUserRepository {
 fun complete(initial: Recipe): Recipe = initial.copy(summary = initial.summary.copy(title = "Patata al vapor"),
     ingredients = initial.ingredients.map { it.copy(quantity = 100.0, unit = "g") },
     instructions = when (initial.instructions) {
-        is RecipeInstructions.Steps -> RecipeInstructions.Steps(listOf(RecipeStep("s1", "Cocer al vapor"), RecipeStep("s2", "Triturar")))
+        is RecipeInstructions.Steps -> RecipeInstructions.Steps(listOf(RecipeStep("s1", "Cocer al vapor", listOf("Cocer al vapor")), RecipeStep("s2", "Triturar", listOf("Triturar"))))
         is RecipeInstructions.Narrative -> RecipeInstructions.Narrative(listOf(RecipeParagraph("p1", "Cocer al vapor. Triturar.")))
     }, servings = initial.servings ?: 1).verifiedFor()
 
-fun Recipe.verifiedFor(babies: List<GenerationBaby> = listOf(GenerationBaby("baby-1", "Nil", 8, "Puré", "suave", listOf("sin leche")))) =
+fun Recipe.verifiedFor(babies: List<GenerationBaby> = listOf(GenerationBaby("baby-1", "Nil", java.time.LocalDate.now(java.time.ZoneId.of("Europe/Madrid")).minusMonths(8).toString(), 8, "Puré", "suave", listOf("sin leche")))) =
     copy(safetyVerification = RecipeSafetyVerification(copy(safetyVerification = null), babies.map { it.copy(name = "") }, true))
 fun Recipe.verifiedFor(context: GenerationContext) = verifiedFor(context.babies)
 
@@ -194,6 +194,32 @@ class RecipeGenerationTest {
             result.validateStoredContent(); actual.close()
         } } }
     }
+    @TestFactory fun `invalid step content or wrong style finishes Error before image planning`() =
+        listOf("blank-objective", "empty-tasks", "blank-task", "wrong-style", "duplicate-id").map { failure ->
+            DynamicTest.dynamicTest(failure) { runTest {
+                val repo = MemoryRecipes(); val jobs = mutableListOf<GenerationJob>()
+                CreateRecipeUseCase(creationAuth(), creationContexts(), { repo }, { GenerationDispatcher { jobs.add(it) } })("token", creationRequest().toDomain())
+                val generator = object : RecipeGenerator {
+                    override suspend fun compose(context: GenerationContext, initial: Recipe): Recipe {
+                        val step = RecipeStep("s", if (failure == "blank-objective") " " else "Preparar",
+                            when (failure) { "empty-tasks" -> emptyList(); "blank-task" -> listOf(" "); else -> listOf("Cocer al vapor.") })
+                        val instructions = if (failure == "wrong-style") RecipeInstructions.Narrative(listOf(RecipeParagraph("p", "Cocer.")))
+                            else RecipeInstructions.Steps(if (failure == "duplicate-id") listOf(step, step) else listOf(step))
+                        return complete(initial).copy(instructions = instructions).verifiedFor(context)
+                    }
+                    override suspend fun planImages(context: GenerationContext, recipe: Recipe): List<PlannedImage> = error("must not plan images")
+                }
+                val reports = mutableListOf<String>()
+                val worker = RecipeGenerationService(repo, { generator }, { error("unused") }, { error("unused") },
+                    report = reports::add, scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)))
+                try {
+                    worker.submit(jobs.single()); advanceUntilIdle()
+                    assertEquals(listOf(RecipeStatus.Created, RecipeStatus.Loading, RecipeStatus.Error), repo.history.map { it.status })
+                    assertEquals(jobs.single().initial.instructions, repo.getAll("uid").single().instructions)
+                } finally { worker.close() }
+            } }
+        }
+
     @Test fun `failed composition does not fail sibling and Error persistence failure is reported`() = runTest {
         val repo = MemoryRecipes(); val jobs = mutableListOf<GenerationJob>(); val reports = mutableListOf<String>()
         val create = CreateRecipeUseCase(creationAuth(), creationContexts(), { repo }, { GenerationDispatcher { jobs.add(it) } })

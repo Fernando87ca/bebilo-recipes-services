@@ -28,6 +28,11 @@ class RecipeCreationIntegrationTest {
             val reference = firestore.collection("users").document(uid).collection("recipes").document(job.documentId)
             val context = reference.get().get().get("generationContext")
             assertNotNull(context); assertFalse(context.toString().contains("fixture-token"))
+            val snapshotContext = context as Map<*, *>
+            assertEquals(job.context.referenceDate, snapshotContext["referenceDate"])
+            val storedBaby = (snapshotContext["babies"] as List<*>).single() as Map<*, *>
+            assertEquals(job.context.babies.single().birthDate, storedBaby["birthDate"])
+            assertEquals(job.context.babies.single().ageMonths.toLong(), storedBaby["ageMonths"])
             val path = "recipe-images/$uid/${job.documentId}/image-1.jpg"
             val images = mapOf("image-1" to path)
             for (status in listOf(RecipeStatus.Loading, RecipeStatus.Ready, RecipeStatus.Error)) {

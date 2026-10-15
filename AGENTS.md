@@ -21,7 +21,9 @@ Category admite los nueve valores de OpenAPI, incluido custom, sin default, infe
 duplicados son errores internos; no producir bibliotecas parciales o vacías para ocultarlos.
 Actualizar OpenAPI y pruebas con cualquier cambio de contrato.
 
-POST `/v1/recipe` consulta AI Configuration y Babies con el Bearer y persiste Created antes de
+POST `/v1/recipe` consulta AI Configuration y Babies con el Bearer. Babies entrega birthDate ISO;
+calcular ageMonths al aceptar con una única referencia Europe/Madrid y reloj inyectable. Guardar
+birthDate, ageMonths derivado y referenceDate en contexto fijo; GET nunca recalcula edad. Persiste Created antes de
 responder 200. El worker de aplicación usa un contexto fijo sin tokens, escribe Loading antes
 de Koog y Ready/Error al terminar. Created/Loading/Error admiten instrucciones vacías; Ready
 requiere contenido textual completo y verificación final efímera vinculada a la receta y contexto.
@@ -34,6 +36,10 @@ Registrar cambios de ingredientes iniciales en ingredientChanges con snapshot or
 y explicarlos en adaptationNotes. Conservar datos indicados de ingredientes mantenidos, métodos y raciones.
 Adaptar título solicitado solo si el cambio lo vuelve incorrecto. Fallos o dudas terminan Error conservando
 solicitud inicial. GET admite histórico sin ingredientChanges como lista vacía, sin reparaciones ni análisis.
+Las instrucciones guardan type según configuración de creación: narrative conserva paragraphs con text;
+steps exige objective y tasks ordenadas no vacías por bloque, sin text/title legacy. La imagen opcional
+pertenece al bloque completo. La app numera tasks desde 1 por bloque. Dos agentes de composición
+especializados se seleccionan por estilo, conservando reglas culinarias comunes.
 Los prompts españoles y schemas están en `src/main/resources/prompts/`; recompilar para cambiarlos.
 No introducir reintentos, reparación LLM ni recuperación tras reinicio.
 

@@ -41,8 +41,8 @@ fun Recipe.validateStoredContent() {
             valid(status != RecipeStatus.Ready || value.steps.isNotEmpty())
             unique(value.steps.map { it.id })
             value.steps.forEach {
-                valid(it.id.isNotBlank() && it.text.isNotBlank())
-                optionalText(it.title)
+                valid(it.id.isNotBlank() && it.objective.isNotBlank())
+                valid(it.tasks.isNotEmpty() && it.tasks.all { task -> task.isNotBlank() })
                 nonNegative(it.durationMinutes)
                 it.image?.validate()
             }

@@ -37,7 +37,7 @@ private fun RecipeIngredientCategory.toResponse(): RecipeIngredientCategoryDto =
 }
 private fun RecipeInstructions.toResponse(): RecipeInstructionsDto = when (this) {
     is RecipeInstructions.Steps -> RecipeInstructionsDto.Steps(steps.map {
-        RecipeStepDto(it.id, it.text, it.title, it.durationMinutes, it.image?.toResponse())
+        RecipeStepDto(it.id, it.objective, it.tasks, it.durationMinutes, it.image?.toResponse())
     })
     is RecipeInstructions.Narrative -> RecipeInstructionsDto.Narrative(paragraphs.map {
         RecipeParagraphDto(it.id, it.text, it.image?.toResponse())

@@ -10,9 +10,19 @@ data class AiSettings(val instructionStyle: String, val photoMode: String, val m
     }
 }
 
+/** Birth date from Babies; no stored or client-supplied age. */
+data class CreationBaby(
+    val id: String, val name: String, val birthDate: String,
+    val feedingStage: String? = null, val preferredTexture: String = "",
+    val restrictions: List<String> = emptyList(), val foodInterest: String = "", val description: String = "",
+) {
+    fun forGeneration(ageMonths: Int) = GenerationBaby(id, name, birthDate, ageMonths, feedingStage,
+        preferredTexture, restrictions, foodInterest, description)
+}
+
 @Serializable
 data class GenerationBaby(
-    val id: String, val name: String, val ageMonths: Int,
+    val id: String, val name: String, val birthDate: String, val ageMonths: Int,
     val feedingStage: String? = null, val preferredTexture: String = "",
     val restrictions: List<String> = emptyList(), val foodInterest: String = "", val description: String = "",
 )
@@ -22,7 +32,7 @@ data class CreateRecipeInput(
     val title: String? = null, val servings: Int? = null, val additionalInstructions: String? = null,
 )
 
-data class GenerationContext(val request: CreateRecipeInput, val settings: AiSettings, val babies: List<GenerationBaby>)
+data class GenerationContext(val request: CreateRecipeInput, val settings: AiSettings, val babies: List<GenerationBaby>, val referenceDate: String)
 
 data class GenerationJob(val ownerUid: String, val documentId: String, val initial: Recipe, val context: GenerationContext)
 data class PlannedImage(val instructionId: String?, val prompt: String, val altText: String)

@@ -10,12 +10,18 @@ class PromptResources {
     val candidateSchema = Json.parseToJsonElement(resource("ingredient-candidates.schema.json")).jsonObject
     val analysisSchema = Json.parseToJsonElement(resource("allergen-analysis.schema.json")).jsonObject
     val alternativesSchema = Json.parseToJsonElement(resource("ingredient-alternatives.schema.json")).jsonObject
-    val composition = resource("composition.txt")
+    private val composition = resource("composition.txt")
+    val stepsComposition = composition + "\n" + resource("composition-steps.txt")
+    val narrativeComposition = composition + "\n" + resource("composition-narrative.txt")
     val visualPlanning = resource("visual-planning.txt")
     val rendering = resource("image-rendering.txt")
     val stepsSchema = Json.parseToJsonElement(resource("recipe-steps.schema.json")).jsonObject
     val narrativeSchema = Json.parseToJsonElement(resource("recipe-narrative.schema.json")).jsonObject
     val imagePlanSchema = Json.parseToJsonElement(resource("image-plan.schema.json")).jsonObject
+
+    fun composition(style: String) = if (style == "steps") stepsComposition else narrativeComposition
+    fun compositionSchema(style: String) = if (style == "steps") stepsSchema else narrativeSchema
+    fun compositionName(style: String) = "composition-$style"
 
     fun cacheKey(agent: String, prompt: String, schema: JsonObject): String = "bebilo-$agent-" +
         MessageDigest.getInstance("SHA-256").digest((prompt + schema.toString()).toByteArray()).take(12)

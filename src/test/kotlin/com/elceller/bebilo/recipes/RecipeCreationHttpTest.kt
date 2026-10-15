@@ -27,7 +27,7 @@ class RecipeCreationHttpTest {
             provide<AuthUserRepository> { creationAuth() }
             provide<CreationContextRepository> { object : CreationContextRepository {
                 override suspend fun settings(token: String): AiSettings = throw failure
-                override suspend fun babies(token: String): List<GenerationBaby> = error("No call")
+                override suspend fun babies(token: String): List<CreationBaby> = error("No call")
             } }
             provide<RecipeWriteRepository> { error("No storage") }
             provide<GenerationDispatcher> { GenerationDispatcher { dispatched = true } }

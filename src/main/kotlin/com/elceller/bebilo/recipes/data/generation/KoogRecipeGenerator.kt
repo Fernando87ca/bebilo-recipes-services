@@ -81,8 +81,8 @@ class KoogRecipeGenerator(
             executor,
             config(
                 "recipe-orchestrator",
-                resources.composition,
-                resources.stepsSchema,
+                resources.composition(context.settings.instructionStyle),
+                resources.compositionSchema(context.settings.instructionStyle),
                 context.settings.modelId,
                 iterations = 10
             ),
@@ -285,10 +285,10 @@ class KoogRecipeGenerator(
 
     private suspend fun composeApproved(context: GenerationContext, initial: Recipe, input: String): Recipe {
         val schema =
-            if (context.settings.instructionStyle == "steps") resources.stepsSchema else resources.narrativeSchema
+            resources.compositionSchema(context.settings.instructionStyle)
         val result = json.decodeFromString<GeneratedRecipe>(
             runAgent(
-                "composition", resources.composition,
+                resources.compositionName(context.settings.instructionStyle), resources.composition(context.settings.instructionStyle),
                 schema, context.settings.modelId, input
             )
         )

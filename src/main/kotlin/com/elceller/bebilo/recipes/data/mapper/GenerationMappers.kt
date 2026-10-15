@@ -10,7 +10,7 @@ fun RecipeIngredientDto.toDomain() = RecipeIngredient(name,
 
 fun RecipeInstructionsDto.toDomain(): RecipeInstructions = when (this) {
     is RecipeInstructionsDto.Steps -> RecipeInstructions.Steps(steps.map {
-        RecipeStep(it.id, it.text, it.title, it.durationMinutes) // Only storage-confirmed images are attached by the server.
+        RecipeStep(it.id, it.objective, it.tasks, it.durationMinutes) // Only storage-confirmed images are attached by the server.
     })
     is RecipeInstructionsDto.Narrative -> RecipeInstructions.Narrative(paragraphs.map { RecipeParagraph(it.id, it.text) })
 }
@@ -33,6 +33,7 @@ fun com.elceller.bebilo.recipes.api.request.CreateRecipeRequest.toDomain() = Cre
     babyIds, ingredients.map { it.toDomain() }, cookingMethods, title, servings, additionalInstructions)
 
 fun GenerationContext.toStorageMap(): Map<String, Any?> = mapOf(
+    "referenceDate" to referenceDate,
     "settings" to storageJson.encodeToJsonElement(settings).toStorageValue(),
     "babies" to storageJson.encodeToJsonElement(babies).toStorageValue(),
     "request" to mapOf("babyIds" to request.babyIds, "ingredients" to request.ingredients.map { ingredient ->

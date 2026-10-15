@@ -23,10 +23,10 @@ class KtorCreationContextRepository(
 ) : CreationContextRepository, AutoCloseable {
     private val json = Json { ignoreUnknownKeys = true }
     override suspend fun settings(token: String): AiSettings = decode(get("$settingsBaseUrl/ai-configuration", token))
-    override suspend fun babies(token: String): List<GenerationBaby> = decode<List<BabyContextDto>>(
+    override suspend fun babies(token: String): List<CreationBaby> = decode<List<BabyContextDto>>(
         get("$babiesBaseUrl/get-babies", token)).map { value ->
             if (value.feedingStage !in listOf(null, "Puré", "Mixto", "Trocito")) throw DependencyResponseException()
-            GenerationBaby(value.id, value.name, value.ageMonths, value.feedingStage, value.preferredTexture,
+            CreationBaby(value.id, value.name, value.birthDate, value.feedingStage, value.preferredTexture,
                 value.restrictions, value.foodInterest, value.description)
         }
     private suspend fun get(url: String, token: String): String {
@@ -51,7 +51,7 @@ class KtorCreationContextRepository(
 /** Required upstream restrictions must never silently become an empty list. */
 @Serializable
 private data class BabyContextDto(
-    val id: String, val name: String, val ageMonths: Int,
+    val id: String, val name: String, val birthDate: String,
     val preferredTexture: String, val restrictions: List<String>, val foodInterest: String, val description: String,
     val feedingStage: String? = null,
 )

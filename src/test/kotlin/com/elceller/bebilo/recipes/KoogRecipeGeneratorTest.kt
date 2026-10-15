@@ -51,6 +51,21 @@ class KoogRecipeGeneratorTest {
                     validateComposition(job.copy(context = context), recipe)
                     val plan = agent.planImages(context, recipe); validateImagePlan(recipe, plan)
                     agent.compose(context.copy(babies = context.babies.map { it.copy(name = "Otro nombre") }), job.initial)
+                    val compositionRequest = requests[2]
+                    val compositionFormat = compositionRequest.getValue("text").jsonObject.getValue("format").jsonObject
+                    assertEquals("composition-$style", compositionFormat.getValue("name").jsonPrimitive.content)
+                    assertTrue(compositionRequest.getValue("input").toString().contains(
+                        if (style == "steps") "ESTILO PASO A PASO CONCISO" else "ESTILO NARRADO"))
+                    assertFalse(compositionRequest.getValue("input").toString().contains(
+                        if (style == "steps") "ESTILO NARRADO" else "ESTILO PASO A PASO CONCISO"))
+                    val instructionSchema = compositionFormat.getValue("schema").jsonObject
+                        .getValue("properties").jsonObject.getValue("instructions").jsonObject.getValue("properties").jsonObject
+                    assertEquals(style, instructionSchema.getValue("type").jsonObject.getValue("enum").jsonArray.single().jsonPrimitive.content)
+                    if (style == "steps") {
+                        val fields = instructionSchema.getValue("steps").jsonObject.getValue("items").jsonObject.getValue("properties").jsonObject
+                        assertTrue(fields.containsKey("objective") && fields.containsKey("tasks"))
+                        assertFalse(fields.containsKey("text") || fields.containsKey("title"))
+                    }
                     val visualFormat = requests[4].getValue("text").jsonObject.getValue("format").jsonObject
                     val imagesSchema = visualFormat.getValue("schema").jsonObject.getValue("properties").jsonObject.getValue("images").jsonObject
                     assertEquals(5, imagesSchema.getValue("maxItems").jsonPrimitive.int)
@@ -118,7 +133,7 @@ class KoogRecipeGeneratorTest {
     } }
     @Test fun `missing baby restrictions are a dependency error rather than no restrictions`() {
         val client = HttpClient(MockEngine { respond(
-            """[{"id":"baby-1","name":"Nil","ageMonths":8,"preferredTexture":"suave","foodInterest":"","description":""}]""",
+            """[{"id":"baby-1","name":"Nil","birthDate":"2026-02-14","preferredTexture":"suave","foodInterest":"","description":""}]""",
             HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) })
         KtorCreationContextRepository("https://example.invalid/ai", "https://example.invalid/babies", client).use { contexts ->
             assertThrows(DependencyResponseException::class.java) { runBlocking { contexts.babies("token") } }

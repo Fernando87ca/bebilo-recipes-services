@@ -53,8 +53,8 @@ data class RecipeIngredientDto(
 @Serializable
 data class RecipeStepDto(
     val id: String,
-    val text: String,
-    val title: String? = null,
+    val objective: String,
+    val tasks: List<String>,
     val durationMinutes: Int? = null,
     val image: RecipeImageDto? = null,
 )

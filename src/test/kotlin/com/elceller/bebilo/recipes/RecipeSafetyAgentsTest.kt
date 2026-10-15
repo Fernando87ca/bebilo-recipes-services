@@ -73,7 +73,7 @@ fun safetyMockOutput(payload: JsonObject, composition: JsonObject, scenario: Str
                     "Se adapta a las restricciones alimentarias", omit)
             }))
         }
-        "composition" -> JsonObject(composition + mapOf(
+        "composition-steps", "composition-narrative" -> JsonObject(composition + mapOf(
             "ingredients" to if (scenario == "unapproved-composition") composition.getValue("ingredients") else input.getValue("approvedIngredients"),
             "adaptationNotes" to if (input.getValue("ingredientChanges").jsonArray.isNotEmpty()) JsonPrimitive("Se sustituye u omite el ingrediente incompatible.") else JsonNull,
             "title" to JsonPrimitive(if (scenario == "title-change") "Verduras al vapor" else input.getValue("request").jsonObject["title"]
@@ -95,12 +95,12 @@ class RecipeSafetyAgentsTest {
                 val ingredients = listOf(RecipeIngredientDto("Patata", emptyList(), RecipeIngredientCategoryDto.Vegetables)) +
                     if (hasMilk) listOf(RecipeIngredientDto("Yogur natural", if (scenario == "declared-alias") listOf(RecipeAllergenDto("milk", "Nombre declarado"))
                         else emptyList(), RecipeIngredientCategoryDto.Dairy, catalogId = "catalog-yogurt")) else emptyList()
-                val babies = listOf(GenerationBaby("baby-1", "Nombre privado", 8, "Puré", "suave",
+                val babies = listOf(GenerationBaby("baby-1", "Nombre privado", java.time.LocalDate.now(java.time.ZoneId.of("Europe/Madrid")).minusMonths(8).toString(), 8, "Puré", "suave",
                     if (scenario in listOf("no-restrictions", "declared-alias")) emptyList() else listOf("sin leche"))) +
-                    if (scenario in listOf("multiple-babies", "added-conflict", "unsafe-other-baby")) listOf(GenerationBaby("baby-2", "Otro nombre privado", 9, restrictions = listOf("sin huevo"))) else emptyList()
+                    if (scenario in listOf("multiple-babies", "added-conflict", "unsafe-other-baby")) listOf(GenerationBaby("baby-2", "Otro nombre privado", java.time.LocalDate.now(java.time.ZoneId.of("Europe/Madrid")).minusMonths(9).toString(), 9, restrictions = listOf("sin huevo"))) else emptyList()
                 val contexts = object : CreationContextRepository {
                     override suspend fun settings(token: String) = AiSettings(style, "none", "gpt-6-luna")
-                    override suspend fun babies(token: String) = babies
+                    override suspend fun babies(token: String) = babies.map { CreationBaby(it.id, it.name, it.birthDate, it.feedingStage, it.preferredTexture, it.restrictions, it.foodInterest, it.description) }
                 }
                 val request = creationRequest().copy(babyIds = babies.map { it.id }, ingredients = ingredients,
                     title = if (scenario == "title-change") "Patata con yogur" else null)
@@ -176,7 +176,7 @@ class RecipeSafetyAgentsTest {
         val job = jobs.single(); val value = complete(job.initial)
         for (invalid in listOf(value.copy(safetyVerification = null), value.copy(ingredients = value.ingredients +
             RecipeIngredient("Huevo", listOf(RecipeAllergen("egg", "Huevo")), RecipeIngredientCategory.Protein)),
-            value.copy(instructions = RecipeInstructions.Steps(listOf(RecipeStep("s", "Añadir leche")))))) {
+            value.copy(instructions = RecipeInstructions.Steps(listOf(RecipeStep("s", "Añadir leche", listOf("Añadir leche"))))))) {
             assertThrows(Exception::class.java) { validateComposition(job, invalid) }
         }
         assertThrows(Exception::class.java) { validateComposition(job.copy(context = job.context.copy(babies = job.context.babies.map {

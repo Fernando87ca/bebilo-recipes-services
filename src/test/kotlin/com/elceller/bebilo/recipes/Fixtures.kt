@@ -15,7 +15,7 @@ fun storedRecipe(id: String = "recipe-001", type: String = "steps", mode: String
         "catalogId" to "catalog-1", "quantity" to 100.5, "unit" to "g", "preparation" to "Troceado")),
     "cookingMethods" to listOf("steam", "future_method"),
     "instructions" to if (type == "steps") mapOf("type" to type, "steps" to listOf(mapOf(
-        "id" to "step-1", "text" to "Texto original", "title" to "Preparación", "durationMinutes" to 5L,
+        "id" to "step-1", "objective" to "Preparación", "tasks" to listOf("Texto original"), "durationMinutes" to 5L,
         "image" to mapOf("url" to "https://example.com/step.png", "altText" to "Paso"),
     ))) else mapOf("type" to type, "paragraphs" to listOf(mapOf(
         "id" to "paragraph-1", "text" to "Primer bloque.\nSegundo bloque.", "image" to mapOf("url" to "https://example.com/paragraph.png"),

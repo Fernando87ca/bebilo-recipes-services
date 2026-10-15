@@ -29,7 +29,7 @@ class RecipeOptionalImagesTest {
                         { GenerationDispatcher { jobs.add(it) } })("token", creationRequest().toDomain())
                     val agent = object : RecipeGenerator {
                         override suspend fun compose(context: GenerationContext, initial: Recipe) = complete(initial).copy(
-                            instructions = if (style == "steps") RecipeInstructions.Steps((1..6).map { RecipeStep("i$it", "Proceso $it") })
+                            instructions = if (style == "steps") RecipeInstructions.Steps((1..6).map { RecipeStep("i$it", "Proceso $it", listOf("Proceso $it")) })
                             else RecipeInstructions.Narrative((1..6).map { RecipeParagraph("i$it", "Proceso $it") })).verifiedFor(context)
                         override suspend fun planImages(context: GenerationContext, recipe: Recipe) =
                             (if (cover) listOf(PlannedImage(null, "Portada", "Plato")) else emptyList()) +

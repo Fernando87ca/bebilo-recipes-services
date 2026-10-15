@@ -1,0 +1,2 @@
+ESTILO NARRADO
+Devuelve instructions.type=narrative y una lista paragraphs no vacía. Cada párrafo explica en prosa clara y natural qué hacer, cómo y en qué orden, con cantidades, tiempos y señales de finalización necesarios. No conviertas el contenido en listas numeradas ni tareas telegráficas. Redacta párrafos con procesos reconocibles para asociar una imagen opcional a su final mediante el ID del párrafo.
